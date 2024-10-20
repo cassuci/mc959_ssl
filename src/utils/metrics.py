@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 
+
 def intersection_over_union(y_true, y_pred):
     """Calculate Intersection over Union (IoU) for segmentation tasks."""
     intersection = np.logical_and(y_true, y_pred)
@@ -11,10 +12,12 @@ def intersection_over_union(y_true, y_pred):
     iou_score = np.sum(intersection) / np.sum(union)
     return iou_score
 
+
 def dice_coefficient(y_true, y_pred):
     """Calculate Dice coefficient for segmentation tasks."""
     intersection = np.sum(y_true * y_pred)
-    return (2. * intersection + 1.) / (np.sum(y_true) + np.sum(y_pred) + 1.)
+    return (2.0 * intersection + 1.0) / (np.sum(y_true) + np.sum(y_pred) + 1.0)
+
 
 def pixel_accuracy(y_true, y_pred):
     """Calculate pixel-wise accuracy for segmentation tasks."""
@@ -22,28 +25,31 @@ def pixel_accuracy(y_true, y_pred):
     total_pixels = y_true.size
     return correct_pixels / total_pixels
 
+
 def classification_metrics(y_true, y_pred, y_prob=None):
     """Calculate various classification metrics."""
     metrics = {
-        'accuracy': accuracy_score(y_true, y_pred),
-        'precision': precision_score(y_true, y_pred, average='weighted'),
-        'recall': recall_score(y_true, y_pred, average='weighted'),
-        'f1_score': f1_score(y_true, y_pred, average='weighted')
+        "accuracy": accuracy_score(y_true, y_pred),
+        "precision": precision_score(y_true, y_pred, average="weighted"),
+        "recall": recall_score(y_true, y_pred, average="weighted"),
+        "f1_score": f1_score(y_true, y_pred, average="weighted"),
     }
-    
+
     if y_prob is not None:
-        metrics['auc_roc'] = roc_auc_score(y_true, y_prob, multi_class='ovr', average='weighted')
-    
+        metrics["auc_roc"] = roc_auc_score(y_true, y_prob, multi_class="ovr", average="weighted")
+
     return metrics
+
 
 class SegmentationMetrics(tf.keras.metrics.Metric):
     """Custom Keras metric for segmentation tasks."""
-    def __init__(self, name='segmentation_metrics', **kwargs):
+
+    def __init__(self, name="segmentation_metrics", **kwargs):
         super().__init__(name=name, **kwargs)
-        self.iou = self.add_weight(name='iou', initializer='zeros')
-        self.dice = self.add_weight(name='dice', initializer='zeros')
-        self.pixel_acc = self.add_weight(name='pixel_acc', initializer='zeros')
-        self.count = self.add_weight(name='count', initializer='zeros')
+        self.iou = self.add_weight(name="iou", initializer="zeros")
+        self.dice = self.add_weight(name="dice", initializer="zeros")
+        self.pixel_acc = self.add_weight(name="pixel_acc", initializer="zeros")
+        self.count = self.add_weight(name="count", initializer="zeros")
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         y_true = tf.cast(y_true, tf.bool)
@@ -56,9 +62,9 @@ class SegmentationMetrics(tf.keras.metrics.Metric):
 
     def result(self):
         return {
-            'iou': self.iou / self.count,
-            'dice': self.dice / self.count,
-            'pixel_accuracy': self.pixel_acc / self.count
+            "iou": self.iou / self.count,
+            "dice": self.dice / self.count,
+            "pixel_accuracy": self.pixel_acc / self.count,
         }
 
     def reset_state(self):

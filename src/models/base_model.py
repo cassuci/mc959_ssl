@@ -2,6 +2,7 @@
 
 import tensorflow as tf
 
+
 class BaseModel(tf.keras.Model):
     def __init__(self, name="BaseModel", **kwargs):
         super().__init__(name=name, **kwargs)
@@ -55,11 +56,11 @@ class BaseModel(tf.keras.Model):
         """Prepare the model for fine-tuning on a new task."""
         for layer in self.encoder.layers[:-trainable_layers]:
             layer.trainable = False
-        
+
         x = self.encoder.output
         x = tf.keras.layers.GlobalAveragePooling2D()(x)
-        x = tf.keras.layers.Dense(256, activation='relu')(x)
-        outputs = tf.keras.layers.Dense(num_classes, activation='softmax')(x)
-        
+        x = tf.keras.layers.Dense(256, activation="relu")(x)
+        outputs = tf.keras.layers.Dense(num_classes, activation="softmax")(x)
+
         self.fine_tuned_model = tf.keras.Model(inputs=self.encoder.input, outputs=outputs)
         return self.fine_tuned_model
