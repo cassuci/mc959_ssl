@@ -49,7 +49,7 @@ def train_pretext_task(task, data_dir, model, epochs=10, batch_size=32):
     return history
 
 if __name__ == "__main__":
-    data_dir = os.path.join("data", "processed")
+    data_dir = os.path.join("/mnt/f/ssl_images/data", "processed", "coco")
     model = ResNet18()
     model.build_encoder((None, 224, 224, 3))
     model.build_decoder(model.encoder.output_shape)

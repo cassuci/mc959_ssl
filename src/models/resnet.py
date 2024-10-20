@@ -1,23 +1,27 @@
-# src/models/resnet.py
-
 import tensorflow as tf
 from .base_model import BaseModel
 
 class ResNetBlock(tf.keras.layers.Layer):
     def __init__(self, filters, stride=1):
         super().__init__()
+        self.filters = filters
+        self.stride = stride
         self.conv1 = tf.keras.layers.Conv2D(filters, 3, stride, padding='same')
         self.bn1 = tf.keras.layers.BatchNormalization()
         self.conv2 = tf.keras.layers.Conv2D(filters, 3, padding='same')
         self.bn2 = tf.keras.layers.BatchNormalization()
-        
-        if stride != 1:
+        self.shortcut = None
+
+    def build(self, input_shape):
+        input_filters = input_shape[-1]
+        if self.stride != 1 or input_filters != self.filters:
             self.shortcut = tf.keras.Sequential([
-                tf.keras.layers.Conv2D(filters, 1, stride),
+                tf.keras.layers.Conv2D(self.filters, 1, self.stride),
                 tf.keras.layers.BatchNormalization()
             ])
         else:
             self.shortcut = lambda x: x
+        super().build(input_shape)
 
     def call(self, inputs):
         x = self.conv1(inputs)
@@ -42,9 +46,10 @@ class ResNet(BaseModel):
         x = tf.keras.layers.MaxPooling2D(3, strides=2, padding='same')(x)
 
         filters = 64
-        for size in self.block_sizes:
-            for _ in range(size):
-                x = ResNetBlock(filters)(x)
+        for i, size in enumerate(self.block_sizes):
+            for j in range(size):
+                stride = 2 if i > 0 and j == 0 else 1
+                x = ResNetBlock(filters, stride=stride)(x)
             filters *= 2
 
         self.encoder = tf.keras.Model(inputs=inputs, outputs=x, name="encoder")
@@ -52,12 +57,10 @@ class ResNet(BaseModel):
     def build_decoder(self, encoder_output_shape):
         inputs = tf.keras.Input(shape=encoder_output_shape[1:])
         x = inputs
-
         for _ in range(2):  # Adjust the number of upsampling layers as needed
             x = tf.keras.layers.Conv2DTranspose(64, 3, strides=2, padding='same')(x)
             x = tf.keras.layers.BatchNormalization()(x)
             x = tf.keras.layers.ReLU()(x)
-
         outputs = tf.keras.layers.Conv2D(3, 3, padding='same', activation='sigmoid')(x)
         self.decoder = tf.keras.Model(inputs=inputs, outputs=outputs, name="decoder")
 

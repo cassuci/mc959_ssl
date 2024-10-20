@@ -33,8 +33,19 @@ def create_inpainting_task(image, mask_size=50):
 
 def create_colorization_task(image):
     """Create a colorization task by converting the image to grayscale."""
-    gray_image = tf.image.rgb_to_grayscale(image)
-    return gray_image
+    # Convert image to numpy array if it's not already
+    if isinstance(image, tf.Tensor):
+        image_array = image.numpy()
+    else:
+        image_array = np.array(image)
+    
+    # Check if the image is already grayscale
+    if len(image_array.shape) == 2 or image_array.shape[-1] == 1:
+        return image_array
+
+    # Convert RGB to grayscale using the luminosity method
+    gray_image = np.dot(image_array[..., :3], [0.2989, 0.5870, 0.1140])
+    return np.expand_dims(gray_image, axis=-1)
 
 def augment_image(image):
     """Apply basic augmentations to the image."""
