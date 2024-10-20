@@ -1,5 +1,3 @@
-# src/libs/data_processing.py
-
 import numpy as np
 from PIL import Image
 import tensorflow as tf
@@ -18,12 +16,19 @@ def normalize_image(image):
 
 def create_inpainting_task(image, mask_size=50):
     """Create an inpainting task by masking a portion of the image."""
-    mask = np.ones_like(image)
-    h, w, _ = image.shape
+    # Convert image to numpy array if it's not already
+    image_array = np.array(image)
+    
+    # Handle both RGB and grayscale images
+    if len(image_array.shape) == 2:
+        image_array = np.expand_dims(image_array, axis=-1)
+    
+    mask = np.ones_like(image_array)
+    h, w, c = image_array.shape
     y = np.random.randint(0, h - mask_size)
     x = np.random.randint(0, w - mask_size)
     mask[y:y+mask_size, x:x+mask_size, :] = 0
-    masked_image = image * mask
+    masked_image = image_array * mask
     return masked_image, mask
 
 def create_colorization_task(image):
