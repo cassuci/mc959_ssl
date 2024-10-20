@@ -37,36 +37,62 @@ class ResNet(BaseModel):
     def __init__(self, block_sizes, name="ResNet", **kwargs):
         super().__init__(name=name, **kwargs)
         self.block_sizes = block_sizes
+        self.encoder = None
+        self.decoder = None
 
-    def build_encoder(self, input_shape):
+    def build(self, input_shape):
         inputs = tf.keras.Input(shape=input_shape[1:])
         x = tf.keras.layers.Conv2D(64, 7, strides=2, padding='same')(inputs)
         x = tf.keras.layers.BatchNormalization()(x)
         x = tf.keras.layers.ReLU()(x)
         x = tf.keras.layers.MaxPooling2D(3, strides=2, padding='same')(x)
 
+        # Store intermediate outputs for skip connections
+        skips = []
+
         filters = 64
         for i, size in enumerate(self.block_sizes):
             for j in range(size):
                 stride = 2 if i > 0 and j == 0 else 1
                 x = ResNetBlock(filters, stride=stride)(x)
+            skips.append(x)
             filters *= 2
 
-        self.encoder = tf.keras.Model(inputs=inputs, outputs=x, name="encoder")
+        # Encoder model
+        self.encoder = tf.keras.Model(inputs=inputs, outputs=[x] + skips, name="encoder")
 
-    def build_decoder(self, encoder_output_shape):
-        inputs = tf.keras.Input(shape=encoder_output_shape[1:])
-        x = inputs
-        for _ in range(2):  # Adjust the number of upsampling layers as needed
-            x = tf.keras.layers.Conv2DTranspose(64, 3, strides=2, padding='same')(x)
+        # Get the encoder outputs
+        encoder_outputs = self.encoder(inputs)
+        main_output, *skip_outputs = encoder_outputs
+        x = main_output
+
+        # Decoder logic starts here
+        for i, skip in enumerate(reversed(skip_outputs)):
+            x = tf.keras.layers.Conv2DTranspose(x.shape[-1] // 2, 3, strides=2, padding='same')(x)
             x = tf.keras.layers.BatchNormalization()(x)
             x = tf.keras.layers.ReLU()(x)
+            
+            # Resize skip connection to match the upsampled feature map
+            skip_resized = tf.keras.layers.Resizing(x.shape[1], x.shape[2])(skip)
+            x = tf.keras.layers.Concatenate()([x, skip_resized])
+            
+            x = ResNetBlock(x.shape[-1] // 2)(x)
+
+        x = tf.keras.layers.Conv2DTranspose(64, 3, strides=2, padding='same')(x)
+        x = tf.keras.layers.BatchNormalization()(x)
+        x = tf.keras.layers.ReLU()(x)
+        x = tf.keras.layers.Conv2DTranspose(32, 3, strides=2, padding='same')(x)
+        x = tf.keras.layers.BatchNormalization()(x)
+        x = tf.keras.layers.ReLU()(x)
         outputs = tf.keras.layers.Conv2D(3, 3, padding='same', activation='sigmoid')(x)
+
+        # Create the decoder model, using the same `inputs`
         self.decoder = tf.keras.Model(inputs=inputs, outputs=outputs, name="decoder")
+        super().build(input_shape)
 
     def call(self, inputs):
-        x = self.encoder(inputs)
-        return self.decoder(x)
+        encoder_outputs = self.encoder(inputs)
+        return self.decoder(encoder_outputs[0])
 
 def ResNet18():
     return ResNet([2, 2, 2, 2], name="ResNet18")
