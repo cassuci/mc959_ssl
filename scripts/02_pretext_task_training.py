@@ -34,17 +34,25 @@ def load_image(file_path):
         img = np.load(path.decode("utf-8"))  # Decode the path from bytes to string
         return img
 
-    img = tf.numpy_function(load_npy, [file_path], tf.float32)
+    # Load image using tf.py_function
+    img = tf.py_function(load_npy, [file_path], tf.float32)
+    img.set_shape([None, None, None])  # Set shape to allow for flexible dimensions
 
-    # Check if the image has a shape before resizing
-    if tf.shape(img).is_fully_defined():
-        img = tf.image.resize(img, (224, 224))
-    else:
-        # Handle the case where the image has no shape (e.g., empty image)
-        # You can raise an exception, log a warning, or return a default value
-        raise ValueError(f"Image at {file_path} has no shape")
+    # Ensure img is a tensor and check dimensions
+    img = tf.convert_to_tensor(img)
 
-    return img
+    # Print the image shape for debugging
+    tf.print(f"Loaded image shape: {img.shape}")
+
+    if img.shape.ndims not in (3, 4):  # Check for 3 or 4 dimensions
+        raise ValueError(
+            f"Image at {file_path} has unexpected number of dimensions: {img.shape.ndims}"
+        )
+
+    if img.shape.ndims == 3 and img.shape[-1] == 1:  # Check for grayscale (3D with single channel)
+        img = tf.expand_dims(img, axis=-1)  # Add channel dimension if grayscale
+
+    return tf.image.resize(img, (224, 224))
 
 
 def create_dataset(input_paths, target_paths, batch_size):
