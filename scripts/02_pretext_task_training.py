@@ -17,9 +17,7 @@ def get_file_paths(data_dir, task):
     files = os.listdir(task_dir)
 
     if task == "inpainting":
-        masked_files = sorted(
-            [os.path.join(task_dir, f) for f in files if f.startswith("masked")]
-        )
+        masked_files = sorted([os.path.join(task_dir, f) for f in files if f.startswith("masked")])
 
         original_files = sorted(
             [os.path.join(task_dir, f) for f in files if f.startswith("original")]
@@ -28,13 +26,9 @@ def get_file_paths(data_dir, task):
         return masked_files, original_files
 
     elif task == "colorization":
-        gray_files = sorted(
-            [os.path.join(task_dir, f) for f in files if f.startswith("gray")]
-        )
+        gray_files = sorted([os.path.join(task_dir, f) for f in files if f.startswith("gray")])
 
-        color_files = sorted(
-            [os.path.join(task_dir, f) for f in files if f.startswith("color")]
-        )
+        color_files = sorted([os.path.join(task_dir, f) for f in files if f.startswith("color")])
 
         return gray_files, color_files
 
@@ -126,9 +120,7 @@ def train_pretext_task(task, data_dir, model, epochs=10, batch_size=16):
     steps_per_epoch = len(get_file_paths(data_dir, task)[0]) // batch_size
 
     # Train with progress bar (optional)
-    history = model.fit(
-        dataset, epochs=epochs, steps_per_epoch=steps_per_epoch, verbose=1
-    )
+    history = model.fit(dataset, epochs=epochs, steps_per_epoch=steps_per_epoch, verbose=1)
     # Alternatively, use verbose=2 for more detailed output
 
     return history
