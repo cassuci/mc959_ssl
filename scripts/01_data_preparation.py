@@ -16,6 +16,11 @@ from src.libs.data_processing import (
 )
 
 
+def is_color_image(image):
+    """Check if the image has three channels (RGB)."""
+    return image.ndim == 3 and image.shape[2] == 3
+
+
 def prepare_coco_data(data_dir, output_dir, num_samples=10000):
     """Prepare COCO dataset for pretext tasks."""
     image_dir = os.path.join(data_dir, "train2017")
@@ -32,6 +37,10 @@ def prepare_coco_data(data_dir, output_dir, num_samples=10000):
         image = load_image(image_path)
         image = resize_image(image)
         image = normalize_image(image)
+
+        # Skip grayscale images
+        if not is_color_image(image):
+            continue
 
         # Inpainting task
         masked_image, mask = create_inpainting_task(image)
@@ -59,6 +68,10 @@ def prepare_pascal_voc_data(data_dir, output_dir):
         image = load_image(image_path)
         image = resize_image(image)
         image = normalize_image(image)
+
+        # Skip grayscale images
+        if not is_color_image(image):
+            continue
 
         # Save the preprocessed image
         np.save(os.path.join(output_dir_classification, f"{image_file[:-4]}.npy"), image)
