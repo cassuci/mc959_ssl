@@ -1,106 +1,148 @@
-import os
-import sys
 import numpy as np
+import os
 import tensorflow as tf
-from tqdm import tqdm
+from tqdm import tqdm  # optional for progress bar
 
-# Add the project root directory to the Python path
+import sys
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.models.resnet import ResNet18
-from src.utils.metrics import SegmentationMetrics
 
 
 def get_file_paths(data_dir, task):
     """Get file paths for the specified task."""
+
     task_dir = os.path.join(data_dir, task)
+
     files = os.listdir(task_dir)
 
     if task == "inpainting":
-        masked_files = sorted([os.path.join(task_dir, f) for f in files if f.startswith("masked")])
+        masked_files = sorted(
+            [os.path.join(task_dir, f) for f in files if f.startswith("masked")]
+        )
+
         original_files = sorted(
             [os.path.join(task_dir, f) for f in files if f.startswith("original")]
         )
+
         return masked_files, original_files
+
     elif task == "colorization":
-        gray_files = sorted([os.path.join(task_dir, f) for f in files if f.startswith("gray")])
-        color_files = sorted([os.path.join(task_dir, f) for f in files if f.startswith("color")])
+        gray_files = sorted(
+            [os.path.join(task_dir, f) for f in files if f.startswith("gray")]
+        )
+
+        color_files = sorted(
+            [os.path.join(task_dir, f) for f in files if f.startswith("color")]
+        )
+
         return gray_files, color_files
 
 
-def load_image(file_path):
-    """Load and preprocess a single image."""
+def load_image(file_path, task):
+    """Loads an image from an `.npy` file and preprocesses it."""
+    # Convert the EagerTensor back to a numpy string
+    file_path = file_path.numpy().decode("utf-8")
 
-    def load_npy(path):
-        path_str = path.numpy().decode("utf-8")  # Decode the path from bytes to string
-        img = np.load(path_str)  # Load the image
-        return img
+    # Load the .npy file content
+    img = np.load(file_path)  # Load image data
 
-    # Load image using tf.py_function
-    img = tf.py_function(load_npy, [file_path], tf.float32)
-    img.set_shape([None, None, None])  # Set shape to allow for flexible dimensions
+    # Preprocess the image (as needed)
+    img = tf.cast(img, tf.float32) / 255.0  # Normalize to [0, 1]
 
-    # Ensure img is a tensor and check dimensions
-    img = tf.convert_to_tensor(img)
+    if task == "inpainting":
+        # Implement any specific inpainting logic here
+        return img, img  # Return masked and original (example logic)
 
-    # Print the image shape for debugging
-    tf.print(f"Loaded image shape before resizing: {img.shape}")
+    elif task == "colorization":
+        # Implement any specific colorization logic here
+        return img, img  # Return gray and color images (example logic)
 
-    if img.shape.ndims not in (3, 4):  # Check for 3 or 4 dimensions
-        raise ValueError(f"Image at {file_path} has unexpected number of dimensions: {img.shape.ndims}")
-
-    if img.shape.ndims == 3 and img.shape[-1] == 1:  # Check for grayscale (3D with single channel)
-        img = tf.expand_dims(img, axis=-1)  # Add channel dimension if grayscale
-
-    img = tf.image.resize(img, (224, 224))
-    tf.print(f"Loaded image shape after resizing: {img.shape}")  # Debug after resizing
-
-    return img
-
-def create_dataset(input_paths, target_paths, batch_size):
-    """Create a TensorFlow dataset from file paths."""
-    input_ds = tf.data.Dataset.from_tensor_slices(input_paths)
-    target_ds = tf.data.Dataset.from_tensor_slices(target_paths)
-
-    input_ds = input_ds.map(load_image, num_parallel_calls=tf.data.AUTOTUNE)
-    target_ds = target_ds.map(load_image, num_parallel_calls=tf.data.AUTOTUNE)
-
-    dataset = tf.data.Dataset.zip((input_ds, target_ds))
-    return dataset.shuffle(10000).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    else:
+        raise ValueError(f"Unsupported task: {task}")
 
 
-def train_pretext_task(task, data_dir, model, epochs=10, batch_size=32):
-    """Train the model on the specified pretext task."""
-    input_paths, target_paths = get_file_paths(data_dir, task)
-    dataset = create_dataset(input_paths, target_paths, batch_size)
+def create_dataset(data_dir, task, batch_size):
+    """Creates a TensorFlow dataset from `.npy` files."""
 
+    # Get the file paths for the specified task
+    task_dir = os.path.join(data_dir, task)
+
+    # Identify the maximum suffix number to construct file paths
+    max_suffix = 0
+    for f in os.listdir(task_dir):
+        if f.endswith(".npy") and (f.startswith("masked_") or f.startswith("gray_")):
+            suffix = int(f.split("_")[-1].split(".")[0])  # Extract the numerical suffix
+            max_suffix = max(max_suffix, suffix)
+
+    # Generate the file paths based on the maximum suffix
+    file_paths = []
+    for i in range(max_suffix + 1):
+        if task == "inpainting":
+            masked_file = os.path.join(task_dir, f"masked_{i}.npy")
+            if os.path.exists(masked_file):
+                file_paths.append(masked_file)
+        elif task == "colorization":
+            gray_file = os.path.join(task_dir, f"gray_{i}.npy")
+            if os.path.exists(gray_file):
+                file_paths.append(gray_file)
+
+    # Create a TensorFlow dataset from the file paths
+    dataset = tf.data.Dataset.from_tensor_slices(file_paths)
+
+    # Function to wrap load_image for use with tf.py_function
+    def load_image_wrapper(file_path):
+        return tf.py_function(
+            func=load_image, inp=[file_path, task], Tout=[tf.float32, tf.float32]
+        )
+
+    # Map the load_image_wrapper to the dataset
+    dataset = dataset.map(load_image_wrapper, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Batch and prefetch the dataset
+    dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+
+    return dataset
+
+
+def get_loss_and_metrics(task):
+    # Define loss and metrics based on task
     if task == "inpainting":
         loss = tf.keras.losses.MeanSquaredError()
         metrics = [tf.keras.metrics.MeanSquaredError()]
     elif task == "colorization":
         loss = tf.keras.losses.MeanAbsoluteError()
         metrics = [tf.keras.metrics.MeanAbsoluteError()]
+    else:
+        raise ValueError(f"Unsupported task: {task}")
+    return loss, metrics
+
+
+def train_pretext_task(task, data_dir, model, epochs=10, batch_size=16):
+    dataset = create_dataset(data_dir, task, batch_size)
+    loss, metrics = get_loss_and_metrics(task)
 
     model.compile(optimizer=tf.keras.optimizers.Adam(), loss=loss, metrics=metrics)
+    steps_per_epoch = len(get_file_paths(data_dir, task)[0]) // batch_size
 
-    steps_per_epoch = len(input_paths) // batch_size
+    # Train with progress bar (optional)
+    history = model.fit(
+        dataset, epochs=epochs, steps_per_epoch=steps_per_epoch, verbose=1
+    )
+    # Alternatively, use verbose=2 for more detailed output
 
-    history = model.fit(dataset, epochs=epochs, steps_per_epoch=steps_per_epoch, verbose=1)
     return history
 
 
 if __name__ == "__main__":
     data_dir = os.path.join("/mnt/f/ssl_images/data", "processed", "coco")
     model = ResNet18()
+    model.build([16, 224, 224, 3])  # Build the model
 
-    # Build the model with a sample input
-    sample_input = tf.keras.Input(shape=(224, 224, 3))
-    model.build(sample_input.shape)
-
-    # Train on inpainting task
+    # Train on inpainting and colorization tasks (separated functions)
     print("Training on inpainting task...")
     inpainting_history = train_pretext_task("inpainting", data_dir, model)
 
-    # Train on colorization task
     print("Training on colorization task...")
     colorization_history = train_pretext_task("colorization", data_dir, model)
 
