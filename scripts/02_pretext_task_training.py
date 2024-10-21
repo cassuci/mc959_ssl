@@ -31,7 +31,8 @@ def load_image(file_path):
     """Load and preprocess a single image."""
 
     def load_npy(path):
-        img = np.load(path.decode("utf-8"))  # Decode the path from bytes to string
+        path_str = path.numpy().decode("utf-8")  # Decode the path from bytes to string
+        img = np.load(path_str)  # Load the image
         return img
 
     # Load image using tf.py_function
@@ -42,18 +43,18 @@ def load_image(file_path):
     img = tf.convert_to_tensor(img)
 
     # Print the image shape for debugging
-    tf.print(f"Loaded image shape: {img.shape}")
+    tf.print(f"Loaded image shape before resizing: {img.shape}")
 
     if img.shape.ndims not in (3, 4):  # Check for 3 or 4 dimensions
-        raise ValueError(
-            f"Image at {file_path} has unexpected number of dimensions: {img.shape.ndims}"
-        )
+        raise ValueError(f"Image at {file_path} has unexpected number of dimensions: {img.shape.ndims}")
 
     if img.shape.ndims == 3 and img.shape[-1] == 1:  # Check for grayscale (3D with single channel)
         img = tf.expand_dims(img, axis=-1)  # Add channel dimension if grayscale
 
-    return tf.image.resize(img, (224, 224))
+    img = tf.image.resize(img, (224, 224))
+    tf.print(f"Loaded image shape after resizing: {img.shape}")  # Debug after resizing
 
+    return img
 
 def create_dataset(input_paths, target_paths, batch_size):
     """Create a TensorFlow dataset from file paths."""
@@ -82,6 +83,7 @@ def train_pretext_task(task, data_dir, model, epochs=10, batch_size=32):
     model.compile(optimizer=tf.keras.optimizers.Adam(), loss=loss, metrics=metrics)
 
     steps_per_epoch = len(input_paths) // batch_size
+
     history = model.fit(dataset, epochs=epochs, steps_per_epoch=steps_per_epoch, verbose=1)
     return history
 
