@@ -91,8 +91,31 @@ def create_dataset(masked_files, original_files, batch_size, shuffle=True):
     
     return dataset
 
+class PeriodicCheckpoint(tf.keras.callbacks.Callback):
+    """Custom callback to save model weights periodically."""
+    def __init__(self, save_freq=5, checkpoint_dir='checkpoints'):
+        super().__init__()
+        self.save_freq = save_freq
+        self.checkpoint_dir = checkpoint_dir
+        os.makedirs(checkpoint_dir, exist_ok=True)
+    
+    def on_epoch_end(self, epoch, logs=None):
+        if (epoch + 1) % self.save_freq == 0:
+            checkpoint_path = os.path.join(
+                self.checkpoint_dir, 
+                f'model_epoch_{epoch + 1:03d}.h5'
+            )
+            self.model.save_weights(checkpoint_path)
+            print(f"\nSaved periodic checkpoint for epoch {epoch + 1} at: {checkpoint_path}")
+
 def train_inpainting(data_dir, model, epochs=10, batch_size=16):
     """Main training function for inpainting with validation."""
+    # Print model summary
+    print("\nModel Architecture:")
+    print("=" * 50)
+    model.summary()
+    print("=" * 50, "\n")
+    
     # Get train and validation file paths
     (train_masked, train_original), (val_masked, val_original) = get_file_paths(data_dir)
     
@@ -110,10 +133,14 @@ def train_inpainting(data_dir, model, epochs=10, batch_size=16):
         train_steps = max(1, len(train_masked) // batch_size)
         print(f"Adjusted batch size to {batch_size} for {len(train_masked)} training samples")
     
-    print(f"Training with {len(train_masked)} training samples and {len(val_masked)} validation samples")
+    # Print training configuration
+    print("Training Configuration:")
+    print(f"Total training samples: {len(train_masked)}")
+    print(f"Total validation samples: {len(val_masked)}")
     print(f"Training steps per epoch: {train_steps}")
     print(f"Validation steps per epoch: {val_steps}")
     print(f"Batch size: {batch_size}")
+    print("=" * 50, "\n")
     
     # Define loss and metrics
     loss = tf.keras.losses.MeanSquaredError()
@@ -126,21 +153,27 @@ def train_inpainting(data_dir, model, epochs=10, batch_size=16):
         metrics=metrics
     )
     
+    # Create checkpoint directory
+    checkpoint_dir = os.path.join("models", "checkpoints")
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    
     # Add callbacks
     callbacks = [
-        # Early stopping to prevent overfitting
+        # Early stopping callback
         tf.keras.callbacks.EarlyStopping(
             monitor='val_loss',
             patience=5,
             restore_best_weights=True
         ),
-        # Model checkpoint to save best model
+        # Best model checkpoint callback
         tf.keras.callbacks.ModelCheckpoint(
-            'best_inpainting_model.h5',
+            os.path.join(checkpoint_dir, 'best_model.h5'),
             monitor='val_loss',
             save_best_only=True,
             save_weights_only=True
         ),
+        # Periodic checkpoint callback (every 5 epochs)
+        PeriodicCheckpoint(save_freq=5, checkpoint_dir=checkpoint_dir),
         # Reduce learning rate when plateauing
         tf.keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss',
@@ -178,5 +211,5 @@ if __name__ == "__main__":
     os.makedirs("models", exist_ok=True)  # Create models directory if it doesn't exist
     save_path = os.path.join("models", "inpainting_model_final.h5")
     model.save_weights(save_path)
-    print(f"Model saved to {save_path}")
+    print(f"Final model saved to {save_path}")
     print("Inpainting training completed successfully!")
