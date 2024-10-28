@@ -24,9 +24,9 @@ def is_color_image(image):
 def prepare_coco_data(data_dir, output_dir, num_samples=100000):
     """Prepare COCO dataset for pretext tasks."""
     image_dir = os.path.join(data_dir, "train2017")
-    output_dir_inpainting = os.path.join(output_dir, "coco", "inpainting")
+    #output_dir_inpainting = os.path.join(output_dir, "coco", "inpainting")
     output_dir_colorization = os.path.join(output_dir, "coco", "colorization")
-    os.makedirs(output_dir_inpainting, exist_ok=True)
+    #os.makedirs(output_dir_inpainting, exist_ok=True)
     os.makedirs(output_dir_colorization, exist_ok=True)
 
     image_files = [f for f in os.listdir(image_dir) if f.endswith(".jpg")]
@@ -43,10 +43,10 @@ def prepare_coco_data(data_dir, output_dir, num_samples=100000):
             continue
 
         # Inpainting task
-        masked_image, mask = create_inpainting_task(image)
-        np.save(os.path.join(output_dir_inpainting, f"masked_{i}.npy"), masked_image)
-        np.save(os.path.join(output_dir_inpainting, f"mask_{i}.npy"), mask)
-        np.save(os.path.join(output_dir_inpainting, f"original_{i}.npy"), image)
+        #masked_image, mask = create_inpainting_task(image)
+        #np.save(os.path.join(output_dir_inpainting, f"masked_{i}.npy"), masked_image)
+        #np.save(os.path.join(output_dir_inpainting, f"mask_{i}.npy"), mask)
+        #np.save(os.path.join(output_dir_inpainting, f"original_{i}.npy"), image)
 
         # Colorization task
         gray_image = create_colorization_task(image)
@@ -87,6 +87,6 @@ if __name__ == "__main__":
     output_dir = os.path.join("/mnt/f/ssl_images/data", "processed")
 
     prepare_coco_data(coco_dir, output_dir)
-    prepare_pascal_voc_data(pascal_voc_dir, output_dir)
+    #prepare_pascal_voc_data(pascal_voc_dir, output_dir)
 
     print("Data preparation completed successfully!")

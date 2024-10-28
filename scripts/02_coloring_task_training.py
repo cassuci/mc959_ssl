@@ -82,8 +82,31 @@ def create_dataset(gray_files, color_files, batch_size, shuffle=True):
     
     return dataset
 
+class PeriodicCheckpoint(tf.keras.callbacks.Callback):
+    """Custom callback to save model weights periodically."""
+    def __init__(self, save_freq=5, checkpoint_dir='checkpoints'):
+        super().__init__()
+        self.save_freq = save_freq
+        self.checkpoint_dir = checkpoint_dir
+        os.makedirs(checkpoint_dir, exist_ok=True)
+    
+    def on_epoch_end(self, epoch, logs=None):
+        if (epoch + 1) % self.save_freq == 0:
+            checkpoint_path = os.path.join(
+                self.checkpoint_dir, 
+                f'model_epoch_{epoch + 1:03d}.h5'
+            )
+            self.model.save_weights(checkpoint_path)
+            print(f"\nSaved periodic checkpoint for epoch {epoch + 1} at: {checkpoint_path}")
+
 def train_colorization(data_dir, model, epochs=10, batch_size=16):
     """Main training function for colorization with validation."""
+    # Print model summary
+    print("\nModel Architecture:")
+    print("=" * 50)
+    model.summary()
+    print("=" * 50, "\n")
+    
     # Get train and validation file paths
     (train_gray, train_color), (val_gray, val_color) = get_file_paths(data_dir)
     
@@ -106,20 +129,37 @@ def train_colorization(data_dir, model, epochs=10, batch_size=16):
     train_steps = len(train_gray) // batch_size
     val_steps = len(val_gray) // batch_size
     
-    # Add early stopping callback
-    early_stopping = tf.keras.callbacks.EarlyStopping(
-        monitor='val_loss',
-        patience=5,
-        restore_best_weights=True
-    )
+    # Print training configuration
+    print("Training Configuration:")
+    print(f"Total training samples: {len(train_gray)}")
+    print(f"Total validation samples: {len(val_gray)}")
+    print(f"Batch size: {batch_size}")
+    print(f"Steps per epoch: {train_steps}")
+    print(f"Validation steps: {val_steps}")
+    print("=" * 50, "\n")
     
-    # Add model checkpoint callback
-    checkpoint = tf.keras.callbacks.ModelCheckpoint(
-        'best_model.h5',
-        monitor='val_loss',
-        save_best_only=True,
-        save_weights_only=True
-    )
+    # Create checkpoint directory
+    checkpoint_dir = os.path.join("models", "checkpoints")
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    
+    # Add callbacks
+    callbacks = [
+        # Early stopping callback
+        tf.keras.callbacks.EarlyStopping(
+            monitor='val_loss',
+            patience=5,
+            restore_best_weights=True
+        ),
+        # Best model checkpoint callback
+        tf.keras.callbacks.ModelCheckpoint(
+            os.path.join(checkpoint_dir, 'best_model.h5'),
+            monitor='val_loss',
+            save_best_only=True,
+            save_weights_only=True
+        ),
+        # Periodic checkpoint callback (every 5 epochs)
+        PeriodicCheckpoint(save_freq=5, checkpoint_dir=checkpoint_dir)
+    ]
     
     # Train with progress bar and validation
     history = model.fit(
@@ -128,7 +168,7 @@ def train_colorization(data_dir, model, epochs=10, batch_size=16):
         epochs=epochs,
         steps_per_epoch=train_steps,
         validation_steps=val_steps,
-        callbacks=[early_stopping, checkpoint],
+        callbacks=callbacks,
         verbose=1
     )
     
