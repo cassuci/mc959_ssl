@@ -21,7 +21,7 @@ def get_file_paths(data_dir):
         if f.startswith("color")
     ])
     
-    return gray_files, color_files
+    return gray_files[:100], color_files[:100]
 
 def load_image(file_path):
     """Loads and preprocesses an image for colorization."""
