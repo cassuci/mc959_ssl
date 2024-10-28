@@ -110,7 +110,7 @@ if __name__ == "__main__":
     model = ResNet18((224, 224, 1))
     
     print("Training colorization model...")
-    history = train_colorization(data_dir, model, epochs=1)
+    history = train_colorization(data_dir, model, epochs=30)
     
     # Save the trained model
     save_path = os.path.join("models", "colorization_model.h5")

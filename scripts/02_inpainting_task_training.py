@@ -125,7 +125,7 @@ if __name__ == "__main__":
     model = ResNet18((224, 224, 3))
     
     print("Training inpainting model...")
-    history = train_inpainting(data_dir, model, epochs=1)
+    history = train_inpainting(data_dir, model, epochs=30)
     
     # Save the trained model
     os.makedirs("models", exist_ok=True)  # Create models directory if it doesn't exist
