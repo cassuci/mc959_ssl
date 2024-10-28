@@ -21,7 +21,7 @@ def is_color_image(image):
     return image.ndim == 3 and image.shape[2] == 3
 
 
-def prepare_coco_data(data_dir, output_dir, num_samples=10000):
+def prepare_coco_data(data_dir, output_dir, num_samples=100000):
     """Prepare COCO dataset for pretext tasks."""
     image_dir = os.path.join(data_dir, "train2017")
     output_dir_inpainting = os.path.join(output_dir, "coco", "inpainting")
