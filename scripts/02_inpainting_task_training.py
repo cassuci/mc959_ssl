@@ -122,8 +122,7 @@ if __name__ == "__main__":
     print(f"Looking for data in: {data_dir}")
     
     # Initialize model
-    model = ResNet18()
-    model.build([None, 224, 224, 3])  # Build with RGB input shape
+    model = ResNet18((224, 224, 3))
     
     print("Training inpainting model...")
     history = train_inpainting(data_dir, model, epochs=1)

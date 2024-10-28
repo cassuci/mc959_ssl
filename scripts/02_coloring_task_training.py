@@ -21,7 +21,7 @@ def get_file_paths(data_dir):
         if f.startswith("color")
     ])
     
-    return gray_files[:100], color_files[:100]
+    return gray_files, color_files
 
 def load_image(file_path):
     """Loads and preprocesses an image for colorization."""
@@ -107,8 +107,7 @@ if __name__ == "__main__":
     data_dir = os.path.join("/mnt/f/ssl_images/data", "processed", "coco", 'colorization')
     
     # Initialize model (assuming your ResNet18 is modified for colorization)
-    model = ResNet18()
-    model.build([None, 224, 224, 1])  # Build with grayscale input shape
+    model = ResNet18((224, 224, 1))
     
     print("Training colorization model...")
     history = train_colorization(data_dir, model, epochs=1)
