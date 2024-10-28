@@ -24,51 +24,46 @@ class ResNetBlock(tf.keras.Model):
         x = self.relu(x)
         x = self.conv2(x)
         x = self.bn2(x, training=training)
-
         shortcut = self.shortcut(inputs) if self.shortcut else inputs
         return self.relu(x + shortcut)
 
 def ResNet(input_shape, block_sizes, name="ResNet"):
     inputs = tf.keras.Input(shape=input_shape)
     
-    # Initial layers
+    # Initial layers - removed MaxPooling and adjusted stride
     x = tf.keras.layers.Conv2D(64, 7, strides=2, padding="same", name="conv1")(inputs)
     x = tf.keras.layers.BatchNormalization(name="bn1")(x)
     x = tf.keras.layers.ReLU()(x)
-    x = tf.keras.layers.MaxPooling2D(3, strides=2, padding="same", name="pool1")(x)
     
-    # ResNet blocks
+    # ResNet blocks - adjusted initial stride
     filters = 64
     for i, size in enumerate(block_sizes):
         for j in range(size):
-            stride = 2 if i > 0 and j == 0 else 1
+            # Modified stride calculation since we removed MaxPooling
+            stride = 2 if (i > 0 and j == 0) or (i == 0 and j == 0) else 1
             x = ResNetBlock(filters, stride=stride, name=f"block_{i}_{j}")(x)
         filters *= 2
     
-    # Decoder layers
+    # Decoder layers - adjusted to account for removed MaxPooling
     x = tf.keras.layers.Conv2DTranspose(256, 4, strides=2, padding="same", name="deconv1")(x)
     x = tf.keras.layers.BatchNormalization(name="debn1")(x)
     x = tf.keras.layers.ReLU(name="derelu1")(x)
-
     x = tf.keras.layers.Conv2DTranspose(128, 4, strides=2, padding="same", name="deconv2")(x)
     x = tf.keras.layers.BatchNormalization(name="debn2")(x)
     x = tf.keras.layers.ReLU(name="derelu2")(x)
-
     x = tf.keras.layers.Conv2DTranspose(64, 4, strides=2, padding="same", name="deconv3")(x)
     x = tf.keras.layers.BatchNormalization(name="debn3")(x)
     x = tf.keras.layers.ReLU(name="derelu3")(x)
-
     x = tf.keras.layers.Conv2DTranspose(32, 4, strides=2, padding="same", name="deconv4")(x)
     x = tf.keras.layers.BatchNormalization(name="debn4")(x)
     x = tf.keras.layers.ReLU(name="derelu4")(x)
-
-    x = tf.keras.layers.Conv2DTranspose(16, 4, strides=2, padding="same", name="deconv5")(x)
+    x = tf.keras.layers.Conv2DTranspose(3, 4, strides=2, padding="same", name="deconv5")(x)
     x = tf.keras.layers.BatchNormalization(name="debn5")(x)
     x = tf.keras.layers.ReLU(name="derelu5")(x)
-
+    
     # Output layer
     outputs = tf.keras.layers.Conv2D(3, 3, padding="same", activation="sigmoid", name="output_conv")(x)
-
+    
     return tf.keras.Model(inputs, outputs, name=name)
 
 def ResNet18(input_shape=(224, 224, 3)):

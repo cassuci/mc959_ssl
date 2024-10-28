@@ -4,7 +4,7 @@ import tensorflow as tf
 from tqdm import tqdm
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from src.models.resnet import ResNet18  # Import your ResNet implementation
+from src.models.resnet import ResNet18, ResNet50
 
 def get_file_paths(data_dir):
     """Get file paths for colorization task and split into train/val sets."""
@@ -139,13 +139,13 @@ if __name__ == "__main__":
     data_dir = os.path.join("/mnt/f/ssl_images/data", "processed", "coco", 'colorization')
     
     # Initialize model (assuming your ResNet18 is modified for colorization)
-    model = ResNet18((224, 224, 1))
+    model = ResNet50((224, 224, 1))
     
     print("Training colorization model...")
-    history = train_colorization(data_dir, model, epochs=30)
+    history = train_colorization(data_dir, model, epochs=100)
     
     # Save the final model
-    save_path = os.path.join("models", "colorization_model_final.h5")
+    save_path = os.path.join("models", "colorization_model_resnet50.h5")
     model.save_weights(save_path)
     print(f"Final model saved to {save_path}")
     print("Colorization training completed successfully!")
