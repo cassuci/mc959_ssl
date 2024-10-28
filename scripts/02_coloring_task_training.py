@@ -3,25 +3,34 @@ import os
 import tensorflow as tf
 from tqdm import tqdm
 import sys
-
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.models.resnet import ResNet18  # Import your ResNet implementation
 
 def get_file_paths(data_dir):
-    """Get file paths for colorization task."""
+    """Get file paths for colorization task and split into train/val sets."""
     files = os.listdir(data_dir)
     
     gray_files = sorted([
-        os.path.join(data_dir, f) for f in files 
+        os.path.join(data_dir, f) for f in files
         if f.startswith("gray")
     ])
     
     color_files = sorted([
-        os.path.join(data_dir, f) for f in files 
+        os.path.join(data_dir, f) for f in files
         if f.startswith("color")
     ])
     
-    return gray_files, color_files
+    # Calculate split indices (80% train, 20% validation)
+    total_samples = len(gray_files)
+    train_size = int(0.8 * total_samples)
+    
+    # Split the files
+    train_gray = gray_files[:train_size]
+    train_color = color_files[:train_size]
+    val_gray = gray_files[train_size:]
+    val_color = color_files[train_size:]
+    
+    return (train_gray, train_color), (val_gray, val_color)
 
 def load_image(file_path):
     """Loads and preprocesses an image for colorization."""
@@ -41,17 +50,18 @@ def load_image(file_path):
     
     return img
 
-def create_dataset(data_dir, batch_size):
+def create_dataset(gray_files, color_files, batch_size, shuffle=True):
     """Creates a TensorFlow dataset for colorization."""
-    # Get file paths
-    gray_files, color_files = get_file_paths(data_dir)
-    
     # Create datasets from file paths
     gray_dataset = tf.data.Dataset.from_tensor_slices(gray_files)
     color_dataset = tf.data.Dataset.from_tensor_slices(color_files)
     
     # Zip the datasets together
     dataset = tf.data.Dataset.zip((gray_dataset, color_dataset))
+    
+    # Shuffle if requested
+    if shuffle:
+        dataset = dataset.shuffle(buffer_size=1000)
     
     # Function to load both images
     def load_image_pair(gray_path, color_path):
@@ -73,9 +83,13 @@ def create_dataset(data_dir, batch_size):
     return dataset
 
 def train_colorization(data_dir, model, epochs=10, batch_size=16):
-    """Main training function for colorization."""
-    # Create dataset
-    dataset = create_dataset(data_dir, batch_size)
+    """Main training function for colorization with validation."""
+    # Get train and validation file paths
+    (train_gray, train_color), (val_gray, val_color) = get_file_paths(data_dir)
+    
+    # Create training and validation datasets
+    train_dataset = create_dataset(train_gray, train_color, batch_size, shuffle=True)
+    val_dataset = create_dataset(val_gray, val_color, batch_size, shuffle=False)
     
     # Define loss and metrics
     loss = tf.keras.losses.MeanAbsoluteError()
@@ -89,14 +103,32 @@ def train_colorization(data_dir, model, epochs=10, batch_size=16):
     )
     
     # Calculate steps per epoch
-    gray_files, _ = get_file_paths(data_dir)
-    steps_per_epoch = len(gray_files) // batch_size
+    train_steps = len(train_gray) // batch_size
+    val_steps = len(val_gray) // batch_size
     
-    # Train with progress bar
+    # Add early stopping callback
+    early_stopping = tf.keras.callbacks.EarlyStopping(
+        monitor='val_loss',
+        patience=5,
+        restore_best_weights=True
+    )
+    
+    # Add model checkpoint callback
+    checkpoint = tf.keras.callbacks.ModelCheckpoint(
+        'best_model.h5',
+        monitor='val_loss',
+        save_best_only=True,
+        save_weights_only=True
+    )
+    
+    # Train with progress bar and validation
     history = model.fit(
-        dataset,
+        train_dataset,
+        validation_data=val_dataset,
         epochs=epochs,
-        steps_per_epoch=steps_per_epoch,
+        steps_per_epoch=train_steps,
+        validation_steps=val_steps,
+        callbacks=[early_stopping, checkpoint],
         verbose=1
     )
     
@@ -112,8 +144,8 @@ if __name__ == "__main__":
     print("Training colorization model...")
     history = train_colorization(data_dir, model, epochs=30)
     
-    # Save the trained model
-    save_path = os.path.join("models", "colorization_model.h5")
+    # Save the final model
+    save_path = os.path.join("models", "colorization_model_final.h5")
     model.save_weights(save_path)
-    print(f"Model saved to {save_path}")
+    print(f"Final model saved to {save_path}")
     print("Colorization training completed successfully!")

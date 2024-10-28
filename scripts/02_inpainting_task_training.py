@@ -8,7 +8,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.models.resnet import ResNet18
 
 def get_file_paths(data_dir):
-    """Get file paths for inpainting task."""
+    """Get file paths for inpainting task and split into train/val sets."""
     # Ensure the directory exists
     if not os.path.exists(data_dir):
         raise ValueError(f"Data directory not found: {data_dir}")
@@ -34,7 +34,19 @@ def get_file_paths(data_dir):
     if len(masked_files) != len(original_files):
         raise ValueError("Number of masked and original files don't match")
     
-    return masked_files, original_files
+    # Calculate split indices (80% train, 20% validation)
+    total_samples = len(masked_files)
+    train_size = int(0.8 * total_samples)
+    
+    # Split the files
+    train_masked = masked_files[:train_size]
+    train_original = original_files[:train_size]
+    val_masked = masked_files[train_size:]
+    val_original = original_files[train_size:]
+    
+    print(f"Split dataset into {len(train_masked)} training and {len(val_masked)} validation samples")
+    
+    return (train_masked, train_original), (val_masked, val_original)
 
 def load_image(file_path):
     """Loads and preprocesses an image for inpainting."""
@@ -48,17 +60,18 @@ def load_image(file_path):
         print(f"Error loading file {file_path}: {str(e)}")
         raise
 
-def create_dataset(data_dir, batch_size):
+def create_dataset(masked_files, original_files, batch_size, shuffle=True):
     """Creates a TensorFlow dataset for inpainting."""
-    # Get file paths
-    masked_files, original_files = get_file_paths(data_dir)
-    
     # Create datasets from file paths
     masked_dataset = tf.data.Dataset.from_tensor_slices(masked_files)
     original_dataset = tf.data.Dataset.from_tensor_slices(original_files)
     
     # Zip the datasets together
     dataset = tf.data.Dataset.zip((masked_dataset, original_dataset))
+    
+    # Shuffle if requested
+    if shuffle:
+        dataset = dataset.shuffle(buffer_size=1000)
     
     def load_image_pair(masked_path, original_path):
         masked_img = tf.py_function(load_image, [masked_path], tf.float32)
@@ -76,23 +89,30 @@ def create_dataset(data_dir, batch_size):
     # Batch and prefetch
     dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
     
-    return dataset, len(masked_files)  # Return dataset and number of samples
+    return dataset
 
 def train_inpainting(data_dir, model, epochs=10, batch_size=16):
-    """Main training function for inpainting."""
-    # Create dataset and get number of samples
-    dataset, num_samples = create_dataset(data_dir, batch_size)
+    """Main training function for inpainting with validation."""
+    # Get train and validation file paths
+    (train_masked, train_original), (val_masked, val_original) = get_file_paths(data_dir)
+    
+    # Create training and validation datasets
+    train_dataset = create_dataset(train_masked, train_original, batch_size, shuffle=True)
+    val_dataset = create_dataset(val_masked, val_original, batch_size, shuffle=False)
     
     # Calculate steps per epoch
-    steps_per_epoch = num_samples // batch_size
-    if steps_per_epoch == 0:
-        # Adjust batch size if needed
-        batch_size = min(num_samples, batch_size)
-        steps_per_epoch = max(1, num_samples // batch_size)
-        print(f"Adjusted batch size to {batch_size} for {num_samples} samples")
+    train_steps = len(train_masked) // batch_size
+    val_steps = len(val_masked) // batch_size
     
-    print(f"Training with {num_samples} samples")
-    print(f"Steps per epoch: {steps_per_epoch}")
+    if train_steps == 0:
+        # Adjust batch size if needed
+        batch_size = min(len(train_masked), batch_size)
+        train_steps = max(1, len(train_masked) // batch_size)
+        print(f"Adjusted batch size to {batch_size} for {len(train_masked)} training samples")
+    
+    print(f"Training with {len(train_masked)} training samples and {len(val_masked)} validation samples")
+    print(f"Training steps per epoch: {train_steps}")
+    print(f"Validation steps per epoch: {val_steps}")
     print(f"Batch size: {batch_size}")
     
     # Define loss and metrics
@@ -106,11 +126,38 @@ def train_inpainting(data_dir, model, epochs=10, batch_size=16):
         metrics=metrics
     )
     
-    # Train with progress bar
+    # Add callbacks
+    callbacks = [
+        # Early stopping to prevent overfitting
+        tf.keras.callbacks.EarlyStopping(
+            monitor='val_loss',
+            patience=5,
+            restore_best_weights=True
+        ),
+        # Model checkpoint to save best model
+        tf.keras.callbacks.ModelCheckpoint(
+            'best_inpainting_model.h5',
+            monitor='val_loss',
+            save_best_only=True,
+            save_weights_only=True
+        ),
+        # Reduce learning rate when plateauing
+        tf.keras.callbacks.ReduceLROnPlateau(
+            monitor='val_loss',
+            factor=0.5,
+            patience=3,
+            min_lr=1e-6
+        )
+    ]
+    
+    # Train with progress bar and validation
     history = model.fit(
-        dataset,
+        train_dataset,
+        validation_data=val_dataset,
         epochs=epochs,
-        steps_per_epoch=steps_per_epoch,
+        steps_per_epoch=train_steps,
+        validation_steps=val_steps,
+        callbacks=callbacks,
         verbose=1
     )
     
@@ -127,9 +174,9 @@ if __name__ == "__main__":
     print("Training inpainting model...")
     history = train_inpainting(data_dir, model, epochs=30)
     
-    # Save the trained model
+    # Save the final model
     os.makedirs("models", exist_ok=True)  # Create models directory if it doesn't exist
-    save_path = os.path.join("models", "inpainting_model.h5")
+    save_path = os.path.join("models", "inpainting_model_final.h5")
     model.save_weights(save_path)
     print(f"Model saved to {save_path}")
     print("Inpainting training completed successfully!")
