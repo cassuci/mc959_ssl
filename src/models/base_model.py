@@ -9,13 +9,10 @@ class BaseModel(tf.keras.Model):
         self.encoder = None
         self.decoder = None
 
-    def build_encoder(self, input_shape):
-        """Build the encoder part of the model."""
-        raise NotImplementedError("Subclasses must implement build_encoder method.")
-
-    def build_decoder(self, encoder_output_shape):
-        """Build the decoder part of the model."""
-        raise NotImplementedError("Subclasses must implement build_decoder method.")
+    def build(self, input_shape):
+        """Build the model."""
+        super().build(input_shape)
+        self._is_built = True
 
     def call(self, inputs):
         """Forward pass of the model."""
@@ -46,7 +43,15 @@ class BaseModel(tf.keras.Model):
 
     def save_weights(self, filepath, **kwargs):
         """Save the model weights."""
-        super().save_weights(filepath, **kwargs)
+        try:
+            # Try saving with h5 format explicitly
+            super().save_weights(filepath, save_format='h5', **kwargs)
+        except ValueError as e:
+            print(f"H5 save failed, trying tensorflow format: {e}")
+            # Try tensorflow format instead
+            tf_path = filepath.replace('.h5', '')
+            super().save_weights(tf_path, save_format='tf', **kwargs)
+            print(f"Saved in TensorFlow format to {tf_path}")
 
     def load_weights(self, filepath, **kwargs):
         """Load the model weights."""

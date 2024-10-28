@@ -123,10 +123,10 @@ if __name__ == "__main__":
     
     # Initialize model
     model = ResNet18()
-    model.build([16, 224, 224, 3])  # Build with RGB input shape
+    model.build([None, 224, 224, 3])  # Build with RGB input shape
     
     print("Training inpainting model...")
-    history = train_inpainting(data_dir, model)
+    history = train_inpainting(data_dir, model, epochs=1)
     
     # Save the trained model
     os.makedirs("models", exist_ok=True)  # Create models directory if it doesn't exist

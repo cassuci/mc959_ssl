@@ -108,10 +108,10 @@ if __name__ == "__main__":
     
     # Initialize model (assuming your ResNet18 is modified for colorization)
     model = ResNet18()
-    model.build([16, 224, 224, 1])  # Build with grayscale input shape
+    model.build([None, 224, 224, 1])  # Build with grayscale input shape
     
     print("Training colorization model...")
-    history = train_colorization(data_dir, model)
+    history = train_colorization(data_dir, model, epochs=1)
     
     # Save the trained model
     save_path = os.path.join("models", "colorization_model.h5")
