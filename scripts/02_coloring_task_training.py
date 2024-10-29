@@ -175,7 +175,7 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, initial_epoch
 
     # Add callbacks
     callbacks = [
-        TrainingProgressCallback(checkpoint_dir=checkpoint_dir, save_freq=5),
+        TrainingProgressCallback(checkpoint_dir=checkpoint_dir, save_freq=1),
         tf.keras.callbacks.EarlyStopping(
             monitor="val_loss", patience=10, restore_best_weights=True
         ),
