@@ -141,8 +141,53 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
         np.save(history_path, self.history)
 
 
+class VGGPerceptualLoss(tf.keras.Model):
+    def __init__(self, resize_inputs=True):
+        super().__init__()
+        # Load VGG19 pretrained on ImageNet
+        vgg = tf.keras.applications.VGG19(include_top=False, weights="imagenet")
+        vgg.trainable = False
+
+        # We'll use these activation layers for perceptual loss
+        output_layers = ["block1_conv2", "block2_conv2", "block3_conv4", "block4_conv4"]
+
+        outputs = [vgg.get_layer(name).output for name in output_layers]
+        self.model = tf.keras.Model([vgg.input], outputs)
+        self.resize_inputs = resize_inputs
+
+    def call(self, inputs):
+        # Preprocessing for VGG
+        x = tf.keras.applications.vgg19.preprocess_input(inputs * 255.0)
+        return self.model(x)
+
+
+class ColorizationLoss(tf.keras.losses.Loss):
+    def __init__(self, vgg_weight=1.0, l1_weight=1.0):
+        super().__init__()
+        self.vgg_model = VGGPerceptualLoss()
+        self.mae = tf.keras.losses.MeanAbsoluteError()
+        self.vgg_weight = vgg_weight
+        self.l1_weight = l1_weight
+
+    def call(self, y_true, y_pred):
+        # L1 loss
+        l1_loss = self.mae(y_true, y_pred)
+
+        # VGG perceptual loss
+        vgg_true = self.vgg_model(y_true)
+        vgg_pred = self.vgg_model(y_pred)
+
+        perceptual_loss = 0
+        for pt, pp in zip(vgg_true, vgg_pred):
+            perceptual_loss += tf.reduce_mean(tf.abs(pt - pp))
+
+        # Combine losses
+        total_loss = (self.l1_weight * l1_loss) + (self.vgg_weight * perceptual_loss)
+        return total_loss
+
+
 def train_colorization(data_dir, model, epochs=100, batch_size=16, initial_epoch=0):
-    """Main training function for colorization with validation."""
+    """Main training function for colorization with validation and perceptual loss."""
     # Get train and validation file paths
     (train_gray, train_color), (val_gray, val_color) = get_file_paths(data_dir)
 
@@ -166,11 +211,16 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, initial_epoch
     # Create checkpoint directory
     checkpoint_dir = os.path.join("models", "checkpoints")
 
-    # Compile model
+    # Initialize loss function with weights
+    loss_fn = ColorizationLoss(vgg_weight=0.1, l1_weight=1.0)
+
+    # Custom metric for monitoring L1 loss only
+    def l1_metric(y_true, y_pred):
+        return tf.reduce_mean(tf.abs(y_true - y_pred))
+
+    # Compile model with custom loss
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4),
-        loss=tf.keras.losses.MeanAbsoluteError(),
-        metrics=[tf.keras.metrics.MeanAbsoluteError()],
+        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4), loss=loss_fn, metrics=[l1_metric]
     )
 
     # Add callbacks
