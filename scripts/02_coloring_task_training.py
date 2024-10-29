@@ -3,9 +3,38 @@ import os
 import tensorflow as tf
 from tqdm import tqdm
 import sys
+import glob
+import re
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.models.resnet import ResNet18, ResNet50
+
+
+def get_latest_checkpoint(checkpoint_dir):
+    """Find the latest checkpoint file and extract its epoch number."""
+    if not os.path.exists(checkpoint_dir):
+        return None, 0
+    
+    # Look for epoch checkpoints
+    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "model_epoch_*.h5"))
+    
+    if not checkpoint_files:
+        return None, 0
+        
+    # Extract epoch numbers and find the latest one
+    epoch_numbers = []
+    for f in checkpoint_files:
+        match = re.search(r'model_epoch_(\d+)\.h5', f)
+        if match:
+            epoch_numbers.append((int(match.group(1)), f))
+    
+    if not epoch_numbers:
+        return None, 0
+        
+    # Get the latest epoch checkpoint
+    latest_epoch, latest_file = max(epoch_numbers, key=lambda x: x[0])
+    
+    return latest_file, latest_epoch
 
 
 def get_file_paths(data_dir):
@@ -13,7 +42,6 @@ def get_file_paths(data_dir):
     files = os.listdir(data_dir)
 
     gray_files = sorted([os.path.join(data_dir, f) for f in files if f.startswith("gray")])
-
     color_files = sorted([os.path.join(data_dir, f) for f in files if f.startswith("color")])
 
     # Verify matching pairs
@@ -109,8 +137,23 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
         self.best_val_loss = float("inf")
         os.makedirs(checkpoint_dir, exist_ok=True)
 
-        # Initialize history tracking
-        self.history = {
+        # Load existing history if it exists
+        history_path = os.path.join(checkpoint_dir, "training_history.npy")
+        if os.path.exists(history_path):
+            try:
+                self.history = np.load(history_path, allow_pickle=True).item()
+            except:
+                self.history = self._initialize_history()
+        else:
+            self.history = self._initialize_history()
+
+        # Load best validation loss if it exists
+        best_loss_path = os.path.join(checkpoint_dir, "best_val_loss.npy")
+        if os.path.exists(best_loss_path):
+            self.best_val_loss = float(np.load(best_loss_path))
+
+    def _initialize_history(self):
+        return {
             "loss": [],
             "val_loss": [],
             "mean_absolute_error": [],
@@ -134,6 +177,8 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
             self.best_val_loss = logs["val_loss"]
             best_model_path = os.path.join(self.checkpoint_dir, "best_model.h5")
             self.model.save_weights(best_model_path)
+            # Save best validation loss
+            np.save(os.path.join(self.checkpoint_dir, "best_val_loss.npy"), self.best_val_loss)
             print(f"\nNew best model saved with validation loss: {self.best_val_loss:.6f}")
 
         # Save training history
@@ -186,8 +231,21 @@ class ColorizationLoss(tf.keras.losses.Loss):
         return total_loss
 
 
-def train_colorization(data_dir, model, epochs=100, batch_size=16, initial_epoch=0):
+def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_dir=None):
     """Main training function for colorization with validation and perceptual loss."""
+    if checkpoint_dir is None:
+        checkpoint_dir = os.path.join("models", "checkpoints")
+    
+    # Find latest checkpoint and epoch
+    latest_checkpoint, initial_epoch = get_latest_checkpoint(checkpoint_dir)
+    
+    if latest_checkpoint:
+        print(f"Found checkpoint at epoch {initial_epoch}, resuming training...")
+        model.load_weights(latest_checkpoint)
+    else:
+        print("No checkpoint found, starting training from scratch...")
+        initial_epoch = 0
+
     # Get train and validation file paths
     (train_gray, train_color), (val_gray, val_color) = get_file_paths(data_dir)
 
@@ -206,13 +264,11 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, initial_epoch
     print(f"Batch size: {batch_size}")
     print(f"Steps per epoch: {train_steps}")
     print(f"Validation steps: {val_steps}")
+    print(f"Starting from epoch: {initial_epoch + 1}")
     print("=" * 50, "\n")
 
-    # Create checkpoint directory
-    checkpoint_dir = os.path.join("models", "checkpoints")
-
     # Initialize loss function with weights
-    loss_fn = ColorizationLoss(vgg_weight=0.1, l1_weight=1.0)
+    loss_fn = ColorizationLoss(vgg_weight=0.1, l1_weight=100.0)
 
     # Custom metric for monitoring L1 loss only
     def l1_metric(y_true, y_pred):
@@ -220,7 +276,9 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, initial_epoch
 
     # Compile model with custom loss
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4), loss=loss_fn, metrics=[l1_metric]
+        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4), 
+        loss=loss_fn, 
+        metrics=[l1_metric]
     )
 
     # Add callbacks
@@ -256,12 +314,13 @@ if __name__ == "__main__":
 
     # Set up paths
     data_dir = os.path.join("/mnt/f/ssl_images/data", "processed", "coco", "colorization")
+    checkpoint_dir = os.path.join("models", "checkpoints")
 
     # Initialize model
     model = ResNet50((224, 224, 1))
 
     print("Training colorization model...")
-    history = train_colorization(data_dir, model, epochs=100)
+    history = train_colorization(data_dir, model, epochs=100, batch_size=24, checkpoint_dir=checkpoint_dir)
 
     # Save the final model
     save_path = os.path.join("models", "colorization_model_resnet50.h5")
