@@ -213,19 +213,17 @@ class ColorizationLoss(tf.keras.losses.Loss):
         self.mae = tf.keras.losses.MeanAbsoluteError()
         self.vgg_weight = vgg_weight
         self.l1_weight = l1_weight
-
+        
     def call(self, y_true, y_pred):
-        # L1 loss
-        l1_loss = self.mae(y_true, y_pred)
-
+        l1_loss = self.mae(y_true, y_pred)  
+        
         # VGG perceptual loss
         vgg_true = self.vgg_model(y_true)
         vgg_pred = self.vgg_model(y_pred)
-
         perceptual_loss = 0
         for pt, pp in zip(vgg_true, vgg_pred):
-            perceptual_loss += tf.reduce_mean(tf.abs(pt - pp))
-
+            perceptual_loss += tf.reduce_mean(tf.square(pt - pp))
+            
         # Combine losses
         total_loss = (self.l1_weight * l1_loss) + (self.vgg_weight * perceptual_loss)
         return total_loss
@@ -268,17 +266,20 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_di
     print("=" * 50, "\n")
 
     # Initialize loss function with weights
-    loss_fn = ColorizationLoss(vgg_weight=0.1, l1_weight=100.0)
+    loss_fn = ColorizationLoss(vgg_weight=0.5, l1_weight=1.0)
 
     # Custom metric for monitoring L1 loss only
     def l1_metric(y_true, y_pred):
         return tf.reduce_mean(tf.abs(y_true - y_pred))
+    
+    def l2_metric(y_true, y_pred):
+        return tf.reduce_mean(tf.square(y_true - y_pred))
 
     # Compile model with custom loss
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4), 
         loss=loss_fn, 
-        metrics=[l1_metric]
+        metrics=[l1_metric, l2_metric]
     )
 
     # Add callbacks
@@ -317,7 +318,7 @@ if __name__ == "__main__":
     checkpoint_dir = os.path.join("models", "checkpoints")
 
     # Initialize model
-    model = ResNet50((224, 224, 1))
+    model = ResNet18((224, 224, 1))
 
     print("Training colorization model...")
     history = train_colorization(data_dir, model, epochs=100, batch_size=24, checkpoint_dir=checkpoint_dir)
