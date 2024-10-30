@@ -78,7 +78,7 @@ def load_image(file_path):
         img = np.load(file_path)
 
         # Preprocess the image
-        img = tf.cast(img, tf.float32) / 255.0
+        img = tf.cast(img, tf.float32) #/ 255.0
 
         if "gray" in file_path:
             # Ensure grayscale input is 1 channel
@@ -278,7 +278,8 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_di
     # Compile model with custom loss
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4), 
-        loss=loss_fn, 
+        #loss=loss_fn, 
+        loss='mae',
         metrics=[l1_metric, l2_metric]
     )
 
@@ -310,6 +311,8 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_di
 
 if __name__ == "__main__":
     # Set random seeds for reproducibility
+    from time import sleep
+    #sleep(300*60)
     tf.random.set_seed(42)
     np.random.seed(42)
 
