@@ -54,8 +54,8 @@ def prepare_coco_data(data_dir, output_dir, num_samples=None):
         # Colorization task in LAB color space
         lab_image = rgb2lab(image)  # Convert RGB to LAB
         gray_image = create_colorization_task(image)
-        np.save(os.path.join(output_dir_colorization, f"gray_{i}.npy"), gray_image)
-        np.save(os.path.join(output_dir_colorization, f"color_{i}.npy"), lab_image)  # Save LAB image
+        np.save(os.path.join(output_dir_colorization, f"gray{i}.npy"), gray_image)
+        np.save(os.path.join(output_dir_colorization, f"color{i}.npy"), lab_image)  # Save LAB image
 
 def prepare_pascal_voc_data(data_dir, output_dir):
     """Prepare Pascal VOC dataset for classification task."""

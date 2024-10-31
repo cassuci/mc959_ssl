@@ -248,7 +248,7 @@ class ColorizationLoss(tf.keras.losses.Loss):
         """Convert LAB to RGB color space using TensorFlow operations."""
         # Efficient LAB to RGB conversion using TensorFlow's built-in functions
         lab = tf.image.convert_image_dtype(lab, dtype=tf.float32)
-        rgb = tf.image.convert_image_dtype(tfio.experimental.color.lab_to_rgb(lab), dtype=tf.uint8)
+        rgb = tf.image.convert_image_dtype(tfio.experimental.color.lab_to_rgb(lab), dtype=tf.float32)
         return tf.image.convert_image_dtype(rgb, dtype=tf.float32)
         #return tf.py_function(func=lab2rgb, inp=[lab], Tout=tf.float32)
         
