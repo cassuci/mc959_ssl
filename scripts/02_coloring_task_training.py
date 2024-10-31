@@ -9,6 +9,7 @@ import re
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.models.resnet import ResNet18, ResNet50
 
+from skimage.color import rgb2lab, lab2rgb  # Import for color space conversion
 
 def get_latest_checkpoint(checkpoint_dir):
     """Find the latest checkpoint file and extract its epoch number."""
@@ -57,10 +58,10 @@ def get_file_paths(data_dir):
     color_files = np.array(color_files)[indices]
 
     # Split the files
-    train_gray = gray_files[:train_size].tolist()
-    train_color = color_files[:train_size].tolist()
-    val_gray = gray_files[train_size:].tolist()
-    val_color = color_files[train_size:].tolist()
+    train_gray = gray_files[:train_size].tolist()[:240]
+    train_color = color_files[:train_size].tolist()[:240]
+    val_gray = gray_files[train_size:].tolist()[:240]
+    val_color = color_files[train_size:].tolist()[:240]
 
     print(f"Training samples: {len(train_gray)}")
     print(f"Validation samples: {len(val_gray)}")
@@ -84,6 +85,18 @@ def load_image(file_path):
             # Ensure grayscale input is 1 channel
             if len(img.shape) == 3 and img.shape[-1] == 3:
                 img = tf.image.rgb_to_grayscale(img)
+        else:
+            L, a, b = tf.unstack(img, axis=-1)
+    
+            # Scale L channel to [0, 1]
+            L = L / 100.0
+            
+            # Scale a and b channels to [0, 1]
+            a = (a + 128.0) / 255.0  # Scale a from [-128, 127] to [0, 1]
+            b = (b + 128.0) / 255.0  # Scale b from [-128, 127] to [0, 1]
+            
+            # Stack channels back together
+            img = tf.stack([L, a, b], axis=-1)
 
         return img
     except Exception as e:
@@ -213,19 +226,70 @@ class ColorizationLoss(tf.keras.losses.Loss):
         self.mae = tf.keras.losses.MeanAbsoluteError()
         self.vgg_weight = vgg_weight
         self.l1_weight = l1_weight
+    
+    @staticmethod
+    def inverse_scale_output(batch):
+        L, a, b = tf.unstack(batch, axis=-1)
+    
+        # Scale L channel to [0, 1]
+        L = L * 100.0
+        
+        # Scale a and b channels to [0, 1]
+        a = (a * 255.0) - 128.0  # Scale a from [-128, 127] to [0, 1]
+        b = (b * 255.0) - 128.0  # Scale b from [-128, 127] to [0, 1]
+        
+        # Stack channels back together
+        return tf.stack([L, a, b], axis=-1)
+
+    @staticmethod
+    def lab_to_rgb(lab):
+        """Convert LAB to RGB color space using TensorFlow operations."""
+        # Remove any extra dimensions and ensure shape is (batch, height, width, channels)
+        #lab = tf.squeeze(lab)
+        
+        # Separate L, a, b channels
+        #L, a, b = tf.split(lab, 3, axis=-1)
+        return tf.py_function(func=lab2rgb, inp=[lab], Tout=tf.float32)
         
     def call(self, y_true, y_pred):
-        l1_loss = self.mae(y_true, y_pred)  
+        # Ensure inputs have correct shape
+        y_true = tf.ensure_shape(y_true, [None, 224, 224, 3])
+        y_pred = tf.ensure_shape(y_pred, [None, 224, 224, 3])
         
-        # VGG perceptual loss
-        vgg_true = self.vgg_model(y_true)
-        vgg_pred = self.vgg_model(y_pred)
-        perceptual_loss = 0
+        # Check for NaN in inputs
+        tf.debugging.check_numerics(y_true, 'y_true contains NaN or Inf')
+        tf.debugging.check_numerics(y_pred, 'y_pred contains NaN or Inf')
+        
+        # L1 loss in LAB space
+        l1_loss = self.mae(y_true, y_pred)
+
+        y_true_scaled = self.inverse_scale_output(y_true)
+        y_pred_scaled = self.inverse_scale_output(y_pred)
+        # Convert LAB to RGB for perceptual loss
+        y_true_rgb = self.lab_to_rgb(y_true_scaled)
+        y_pred_rgb = self.lab_to_rgb(y_pred_scaled)
+
+        # Check for NaN in RGB outputs
+        tf.debugging.check_numerics(y_true_rgb, 'y_true_rgb contains NaN or Inf')
+        tf.debugging.check_numerics(y_pred_rgb, 'y_pred_rgb contains NaN or Inf')
+
+        # VGG perceptual loss in RGB space
+        vgg_true = self.vgg_model(y_true_rgb)
+        vgg_pred = self.vgg_model(y_pred_rgb)
+
+        perceptual_loss = 0.0
         for pt, pp in zip(vgg_true, vgg_pred):
+            tf.debugging.check_numerics(pt, 'Feature map from y_true contains NaN or Inf')
+            tf.debugging.check_numerics(pp, 'Feature map from y_pred contains NaN or Inf')
             perceptual_loss += tf.reduce_mean(tf.square(pt - pp))
             
         # Combine losses
         total_loss = (self.l1_weight * l1_loss) + (self.vgg_weight * perceptual_loss)
+
+        if tf.reduce_any(tf.math.is_nan(total_loss)):
+            print('NaN loss encountered.')
+            total_loss = tf.constant(0.0, dtype=tf.float32)  # Ensure it's a float
+
         return total_loss
 
 
@@ -277,9 +341,9 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_di
 
     # Compile model with custom loss
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4), 
-        #loss=loss_fn, 
-        loss='mae',
+        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4, clipnorm=1), 
+        loss=loss_fn, 
+        #loss='mae',
         metrics=[l1_metric, l2_metric]
     )
 
@@ -310,9 +374,7 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_di
 
 
 if __name__ == "__main__":
-    # Set random seeds for reproducibility
-    from time import sleep
-    #sleep(300*60)
+    # Set random seeds for reproducibility'
     tf.random.set_seed(42)
     np.random.seed(42)
 
@@ -324,7 +386,7 @@ if __name__ == "__main__":
     model = ResNet18((224, 224, 1))
 
     print("Training colorization model...")
-    history = train_colorization(data_dir, model, epochs=100, batch_size=24, checkpoint_dir=checkpoint_dir)
+    history = train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_dir=checkpoint_dir)
 
     # Save the final model
     save_path = os.path.join("models", "colorization_model_resnet50.h5")
