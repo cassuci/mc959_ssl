@@ -1,10 +1,12 @@
 import os
 import sys
+import json
 import numpy as np
 from PIL import Image
 import tensorflow as tf
 from tqdm import tqdm
 from skimage.color import rgb2lab, lab2rgb  # Import for color space conversion
+import xml.etree.ElementTree as ET
 
 # Add the project root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -57,6 +59,15 @@ def prepare_coco_data(data_dir, output_dir, num_samples=None):
         np.save(os.path.join(output_dir_colorization, f"gray{i}.npy"), gray_image)
         np.save(os.path.join(output_dir_colorization, f"color{i}.npy"), lab_image)  # Save LAB image
 
+
+def get_pascal_voc_annotations(xml_file):
+    """Read XML files to extract list of objects in image."""
+    tree = ET.parse(xml_file)
+    root = tree.getroot()
+    objects = list(set([obj.find('name').text for obj in root.findall('object')]))
+    return objects
+
+
 def prepare_pascal_voc_data(data_dir, output_dir):
     """Prepare Pascal VOC dataset for classification task."""
     image_dir = os.path.join(data_dir, "JPEGImages")
@@ -65,6 +76,8 @@ def prepare_pascal_voc_data(data_dir, output_dir):
     os.makedirs(output_dir_classification, exist_ok=True)
     
     image_files = [f for f in os.listdir(image_dir) if f.endswith(".jpg")]
+    annotations = dict()
+
     for image_file in tqdm(image_files, desc="Preparing Pascal VOC data"):
         image_path = os.path.join(image_dir, image_file)
         image = load_image(image_path)
@@ -77,7 +90,14 @@ def prepare_pascal_voc_data(data_dir, output_dir):
         
         # Save the preprocessed image
         np.save(os.path.join(output_dir_classification, f"{image_file[:-4]}.npy"), image)
-    # TODO: Process annotations and create labels for classification task
+
+        # Create dict with filename and the objects that image contains
+        objects = get_pascal_voc_annotations(os.path.join(annotation_dir, image_file.replace('.jpg', '.xml')))
+        annotations.update({image_file[:-4]: objects})
+    
+    with open(os.path.join(output_dir_classification, 'data.json'), 'w') as file:
+        json.dump(annotations, file)
+
 
 if __name__ == "__main__":
     coco_dir = os.path.join("/mnt/f/ssl_images/data", "coco")
