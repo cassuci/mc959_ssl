@@ -59,35 +59,3 @@ def augment_image(image):
     image = tf.image.random_brightness(image, max_delta=0.2)
     image = tf.image.random_contrast(image, lower=0.8, upper=1.2)
     return image
-
-
-def prepare_coco_dataset(image_paths, batch_size=32):
-    """Prepare COCO dataset for training."""
-
-    def load_and_preprocess(image_path):
-        image = load_image(image_path)
-        image = resize_image(image)
-        image = normalize_image(image)
-        image = augment_image(image)
-        return image
-
-    dataset = tf.data.Dataset.from_tensor_slices(image_paths)
-    dataset = dataset.map(load_and_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-    dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
-    return dataset
-
-
-def prepare_pascal_voc_dataset(image_paths, labels, batch_size=32):
-    """Prepare Pascal VOC dataset for training."""
-
-    def load_and_preprocess(image_path, label):
-        image = load_image(image_path)
-        image = resize_image(image)
-        image = normalize_image(image)
-        image = augment_image(image)
-        return image, label
-
-    dataset = tf.data.Dataset.from_tensor_slices((image_paths, labels))
-    dataset = dataset.map(load_and_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-    dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
-    return dataset
