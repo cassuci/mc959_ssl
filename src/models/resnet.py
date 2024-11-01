@@ -85,7 +85,7 @@ def ResNet(input_shape, block_sizes, name="ResNet"):
     # Final output layers
     x = tf.keras.layers.Conv2D(8, 3, padding="same", name="pre_output_conv")(x)
     x = tf.keras.layers.LeakyReLU(0.2)(x)
-    outputs = tf.keras.layers.Conv2D(3, 3, padding="same", activation="tanh", name="output_conv")(
+    outputs = tf.keras.layers.Conv2D(2, 3, padding="same", activation="sigmoid", name="output_conv")(
         x
     )
 

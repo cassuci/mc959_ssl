@@ -63,6 +63,7 @@ def get_file_paths(data_dir):
     val_color = color_files[train_size:].tolist()
 
     print(f"Training samples: {len(train_gray)}")
+    print(train_gray[:10])
     print(f"Validation samples: {len(val_gray)}")
 
     return (train_gray, train_color), (val_gray, val_color)
@@ -248,14 +249,15 @@ class ColorizationLoss(tf.keras.losses.Loss):
         """Convert LAB to RGB color space using TensorFlow operations."""
         # Efficient LAB to RGB conversion using TensorFlow's built-in functions
         lab = tf.image.convert_image_dtype(lab, dtype=tf.float32)
-        rgb = tf.image.convert_image_dtype(tfio.experimental.color.lab_to_rgb(lab), dtype=tf.float32)
+        rgb = tf.image.convert_image_dtype(tfio.experimental.color.lab_to_rgb(lab), dtype=tf.uint8)
         return tf.image.convert_image_dtype(rgb, dtype=tf.float32)
-        #return tf.py_function(func=lab2rgb, inp=[lab], Tout=tf.float32)
         
     def call(self, y_true, y_pred):
         # Ensure inputs have correct shape and data type
         y_true = tf.cast(y_true, tf.float32)
         y_pred = tf.cast(y_pred, tf.float32)
+        L, _, _ = tf.split(y_true, 3, axis=-1)
+        y_pred = tf.concat([L, y_pred], axis=-1)
 
         # L1 loss in LAB space
         l1_loss = self.mae(y_true, y_pred)
@@ -319,16 +321,20 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_di
 
     # Custom metric for monitoring L1 loss only
     def l1_metric(y_true, y_pred):
+        _, a, b = tf.split(y_true, 3, axis=-1)
+        y_true = tf.concat([a, b], axis=-1)
         return tf.reduce_mean(tf.abs(y_true - y_pred))
     
     def l2_metric(y_true, y_pred):
+        _, a, b = tf.split(y_true, 3, axis=-1)
+        y_true = tf.concat([a, b], axis=-1)
         return tf.reduce_mean(tf.square(y_true - y_pred))
 
     # Compile model with custom loss
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4, clipnorm=1), 
-        loss=loss_fn, 
-        #loss='mae',
+        #loss=loss_fn, 
+        loss=l1_metric,
         metrics=[l1_metric, l2_metric]
     )
 
