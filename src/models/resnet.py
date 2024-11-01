@@ -54,7 +54,11 @@ def upsample_block(x, skip_connection, filters, name_prefix):
     return x
 
 
-def ResNet(input_shape, block_sizes, name="ResNet"):
+def ResNet(input_shape, block_sizes, name="ResNet", mode="classification"):
+
+    assert mode in ['classification', 'colorization', 'inpainting'], \
+           "Invalid mode. Choose either 'classification', 'colorization' or 'inpainting'."
+
     inputs = tf.keras.Input(shape=input_shape)
 
     # Initial layers
@@ -74,34 +78,42 @@ def ResNet(input_shape, block_sizes, name="ResNet"):
             x = ResNetBlock(filters, stride=stride, name=f"block_{i}_{j}")(x)
         filters *= 2
 
-    # Decoder pathway with skip connections
-    skips = skip_connections[::-1]  # Reverse skip connections
-    decoder_filters = [256, 128, 64, 32, 16]
+    if mode == 'classification':
+        x = tf.keras.layers.GlobalAveragePooling2D(name="avg_pool")(x)
+        outputs = tf.keras.layers.Dense(20, activation='softmax', name="predictions")(x)
 
-    for i, filters in enumerate(decoder_filters):
-        skip = skips[i] if i < len(skips) else None
-        x = upsample_block(x, skip, filters, f"decoder_{i}")
+    elif mode == 'colorization':
+        # Decoder pathway with skip connections
+        skips = skip_connections[::-1]  # Reverse skip connections
+        decoder_filters = [256, 128, 64, 32, 16]
 
-    # Final output layers
-    x = tf.keras.layers.Conv2D(8, 3, padding="same", name="pre_output_conv")(x)
-    x = tf.keras.layers.LeakyReLU(0.2)(x)
-    outputs = tf.keras.layers.Conv2D(2, 3, padding="same", activation="sigmoid", name="output_conv")(
-        x
-    )
+        for i, filters in enumerate(decoder_filters):
+            skip = skips[i] if i < len(skips) else None
+            x = upsample_block(x, skip, filters, f"decoder_{i}")
 
-    # Scale tanh output to [0, 1] range
-    outputs = (outputs + 1) / 2
+        # Final output layers
+        x = tf.keras.layers.Conv2D(8, 3, padding="same", name="pre_output_conv")(x)
+        x = tf.keras.layers.LeakyReLU(0.2)(x)
+        outputs = tf.keras.layers.Conv2D(2, 3, padding="same", activation="sigmoid", name="output_conv")(
+            x
+        )
+
+        # Scale tanh output to [0, 1] range
+        outputs = (outputs + 1) / 2
+
+    elif mode == 'inpainting':
+        raise NotImplementedError("Inpainting decoder is not implemented.")
 
     return tf.keras.Model(inputs, outputs, name=name)
 
 
-def ResNet18(input_shape=(224, 224, 3)):
-    return ResNet(input_shape, [2, 2, 2, 2], name="ResNet18")
+def ResNet18(input_shape=(224, 224, 3), mode="classification"):
+    return ResNet(input_shape, [2, 2, 2, 2], name="ResNet18", mode=mode)
 
 
-def ResNet34(input_shape=(224, 224, 3)):
-    return ResNet(input_shape, [3, 4, 6, 3], name="ResNet34")
+def ResNet34(input_shape=(224, 224, 3), mode="classification"):
+    return ResNet(input_shape, [3, 4, 6, 3], name="ResNet34", mode=mode)
 
 
-def ResNet50(input_shape=(224, 224, 3)):
-    return ResNet(input_shape, [3, 4, 6, 3], name="ResNet50")
+def ResNet50(input_shape=(224, 224, 3), mode="classification"):
+    return ResNet(input_shape, [3, 4, 6, 3], name="ResNet50", mode=mode)
