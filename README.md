@@ -79,7 +79,14 @@ Follow these steps to run the project:
    ```
    This fine-tunes the pre-trained model on the classification task.
 
-5. Evaluate the model:
+5. Train baseline for downstream task:
+   ```
+   python scripts/03_supervised_baseline.py
+   ```
+   This trains a model from scratch on the classification task.
+
+
+6. Evaluate the model:
    ```
    python scripts/04_evaluation.py
    ```
