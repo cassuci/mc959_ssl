@@ -1,3 +1,89 @@
-*.pyc
+# Python
 __pycache__/
-data/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.env
+.venv
+env.bak/
+venv.bak/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+.classpath
+.settings/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+*.ipynb-meta
+
+# Data files
+*.csv
+*.dat
+*.pkl
+*.npy
+*.h5
+*.hdf5
+*.sqlite
+data/raw/
+data/processed/
+
+# Model files and checkpoints
+*.pth
+*.pt
+*.ckpt
+*.pb
+*.onnx
+*.tflite
+*.lite
+models/
+checkpoints/
+runs/
+wandb/
+
+# Logs and results
+logs/
+results/
+tensorboard/
+*.log
+
+# OS-specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Secrets and configs
+config.ini
+secrets.yaml
+credentials.json
+*.key
