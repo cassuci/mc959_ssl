@@ -11,24 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.models.resnet import ResNet18
 from src.utils.metrics import classification_metrics
-
-
-def load_classification_data(data_dir):
-    """Load preprocessed data for the classification task."""
-    task_dir = os.path.join(data_dir, "classification")
-    files = os.listdir(task_dir)
-    images = [np.load(os.path.join(task_dir, f)) for f in files if f.endswith(".npy")]
-
-    # TODO: Load and process labels
-    labels = np.random.randint(0, 20, len(images))  # Placeholder, replace with actual labels
-
-    return np.array(images), labels
-
-
-def create_dataset(images, labels, batch_size):
-    """Create a TensorFlow dataset from images and labels."""
-    dataset = tf.data.Dataset.from_tensor_slices((images, labels))
-    return dataset.shuffle(10000).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+from src.libs.data_loading import load_classification_data, create_dataset
 
 
 def fine_tune_model(model, dataset, num_classes, epochs=10):
