@@ -101,6 +101,7 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification"):
         # Scale tanh output to [0, 1] range
         outputs = (outputs + 1) / 2
 
+    # TODO Inpainting decoder (not sure if it's the same as colorization, maybe output shape is different?)
     elif mode == 'inpainting':
         raise NotImplementedError("Inpainting decoder is not implemented.")
 

@@ -309,7 +309,7 @@ if __name__ == "__main__":
     checkpoint_dir = os.path.join("models", "checkpoints")
 
     # Initialize model
-    model = ResNet18((224, 224, 3))
+    model = ResNet18((224, 224, 3), mode='inpainting')
 
     print("Training inpainting model...")
     history = train_inpainting(data_dir, model, epochs=100, batch_size=24, checkpoint_dir=checkpoint_dir)
