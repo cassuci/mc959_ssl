@@ -80,7 +80,7 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification"):
 
     if mode == 'classification':
         x = tf.keras.layers.GlobalAveragePooling2D(name="avg_pool")(x)
-        outputs = tf.keras.layers.Dense(20, activation='softmax', name="predictions")(x)
+        outputs = tf.keras.layers.Dense(20, activation='sigmoid', name="predictions")(x)
 
     elif mode == 'colorization':
         # Decoder pathway with skip connections
