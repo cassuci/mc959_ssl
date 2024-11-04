@@ -7,7 +7,7 @@ import tensorflow as tf
 # Add the project root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.models.resnet import ResNet18
+from src.models.resnet import ResNet18, load_encoder_weights
 from src.libs.data_loading import load_classification_data, create_dataset
 
 
@@ -16,7 +16,7 @@ def train_model(model, train_dataset, val_dataset, epochs=10):
 
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-4),
-        loss=tf.keras.losses.BinaryFocalCrossentropy(apply_class_balancing=True, alpha=0.6),
+        loss=tf.keras.losses.BinaryFocalCrossentropy(apply_class_balancing=True, alpha=0.1, gamma=0.5),
         metrics=[tf.keras.metrics.BinaryAccuracy(), tf.keras.metrics.Precision(), tf.keras.metrics.Recall()],
     )
 
@@ -48,9 +48,14 @@ if __name__ == "__main__":
     data_path = "ssl_images/data"   # "/mnt/f/ssl_images/data" if you're Gabriel 
     data_dir = os.path.join(data_path, "processed", "pascal_voc")
     metadata_dir = os.path.join(data_path, "pascal_voc", "ImageSets", "Main")
+    pretrained_model = None # path to pretrained model if it's finetuning
 
     model = ResNet18((224, 224, 3), mode='classification')
     print(model.summary())
+
+    if pretrained_model:
+        print("Loading model weights...")
+        load_encoder_weights(model, pretrained_model)
 
     # Load classification data
     print("Loading data and creating dataset...")
