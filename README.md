@@ -16,7 +16,7 @@ self_supervised_learning_project/
 │   ├── 00_download_data.py
 │   ├── 01_data_preparation.py
 │   ├── 02_pretext_task_training.py
-│   ├── 03_supervised_finetuning.py
+│   ├── 03_supervised_training.py
 │   └── 04_evaluation.py
 ├── src/
 │   ├── libs/
@@ -75,18 +75,11 @@ Follow these steps to run the project:
 
 4. Fine-tune on downstream task:
    ```
-   python scripts/03_supervised_finetuning.py
+   python scripts/03_supervised_training.py
    ```
    This fine-tunes the pre-trained model on the classification task.
 
-5. Train baseline for downstream task:
-   ```
-   python scripts/03_supervised_baseline.py
-   ```
-   This trains a model from scratch on the classification task.
-
-
-6. Evaluate the model:
+5. Evaluate the model:
    ```
    python scripts/04_evaluation.py
    ```
