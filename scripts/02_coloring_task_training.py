@@ -333,8 +333,8 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_di
     # Compile model with custom loss
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4, clipnorm=1), 
-        #loss=loss_fn, 
-        loss=l1_metric,
+        loss=loss_fn, 
+        #loss=l1_metric,
         metrics=[l1_metric, l2_metric]
     )
 
@@ -374,7 +374,7 @@ if __name__ == "__main__":
     checkpoint_dir = os.path.join("models", "checkpoints")
 
     # Initialize model
-    model = ResNet18((224, 224, 1), mode='colorization')
+    model = ResNet50((224, 224, 1), mode='colorization')
 
     print("Training colorization model...")
     history = train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_dir=checkpoint_dir)
