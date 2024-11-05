@@ -20,13 +20,19 @@ def objects_to_labels(objects, num_classes=20):
     return labels
 
 def parse_function(filename, label, data_dir):
-    """Load image from filename."""
+    """Load image from filename and average all 3 channels into a single channel."""
     # Load the image from file
     filename = filename.numpy().decode("utf-8")
     data_dir = data_dir.numpy().decode("utf-8")
     image = np.load(os.path.join(data_dir, "classification", f"{filename}.npy"))
+    
+    # Average the three channels
+    #image_mean = np.mean(image, axis=-1)  # Average across the last dimension (channels)
+    
+    # Expand dimensions to make it (height, width, 1)
+    #image_mean = np.expand_dims(image_mean, axis=-1)  # Add a new axis for the single channel
+    
     return image, label
-
 
 def load_classification_data(data_dir, split_list_file):
     """Create a tf.data.Dataset for the classification task."""
@@ -63,4 +69,4 @@ def load_classification_data(data_dir, split_list_file):
 def create_dataset(data_dir, split_list_file, batch_size):
     """Load the data and prepare it as a batched tf.data.Dataset."""
     dataset = load_classification_data(data_dir, split_list_file)
-    return dataset.shuffle(10000).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    return dataset.shuffle(500).batch(batch_size).prefetch(tf.data.AUTOTUNE)

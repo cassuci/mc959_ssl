@@ -16,33 +16,42 @@ def train_model(model, train_dataset, val_dataset, epochs=10):
 
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-4),
-        loss=tf.keras.losses.BinaryFocalCrossentropy(apply_class_balancing=True, alpha=0.1, gamma=0.5),
-        metrics=[tf.keras.metrics.BinaryAccuracy(), tf.keras.metrics.Precision(), tf.keras.metrics.Recall()],
+        # loss=tf.keras.losses.BinaryFocalCrossentropy(apply_class_balancing=True, alpha=0.1, gamma=0.5),
+        loss=tf.keras.losses.BinaryCrossentropy(from_logits=False, label_smoothing=0.1),
+        metrics=[
+            tf.keras.metrics.BinaryAccuracy(),
+            tf.keras.metrics.Precision(),
+            tf.keras.metrics.Recall(),
+            tf.keras.metrics.AUC(multi_label=True, name="auc_roc"),
+            tf.keras.metrics.AUC(curve='PR', name='average_precision'),
+        ],
     )
 
-    early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', 
-                                                      min_delta=0, 
-                                                      patience=5, 
-                                                      verbose=1, 
-                                                      mode='auto')
+    early_stopping = tf.keras.callbacks.EarlyStopping(
+        monitor="val_loss", min_delta=0, patience=5, verbose=1, mode="auto"
+    )
 
-    checkpoint = tf.keras.callbacks.ModelCheckpoint("models/baseline_{epoch:02d}_{val_loss:.2f}.h5", 
-                                                    monitor='val_loss', 
-                                                    verbose=1, 
-                                                    save_best_only=True, 
-                                                    save_weights_only=True,
-                                                    mode='auto')
+    checkpoint = tf.keras.callbacks.ModelCheckpoint(
+        "models/baseline/model_epoch_{epoch:02d}_loss_{val_loss:.2f}.h5",
+        monitor="val_loss",
+        verbose=1,
+        save_best_only=True,
+        save_weights_only=True,
+        mode="auto",
+    )
 
-    reduceLRcallback = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', 
-                                                            factor=0.5, 
-                                                            patience=3,
-                                                            verbose=1, 
-                                                            mode='auto')
+    reduceLRcallback = tf.keras.callbacks.ReduceLROnPlateau(
+        monitor="val_loss", factor=0.5, patience=3, verbose=1, mode="auto"
+    )
 
-    history = model.fit(train_dataset, validation_data=val_dataset, epochs=epochs, verbose=1,
-                        callbacks = [early_stopping, checkpoint, reduceLRcallback])
+    history = model.fit(
+        train_dataset,
+        validation_data=val_dataset,
+        epochs=epochs,
+        verbose=1,
+        callbacks=[early_stopping, checkpoint, reduceLRcallback],
+    )
     return model, history
-
 
 if __name__ == "__main__":
     data_path = "ssl_images/data"   # "/mnt/f/ssl_images/data" if you're Gabriel 
