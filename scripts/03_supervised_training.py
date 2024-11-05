@@ -8,7 +8,7 @@ import tensorflow as tf
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.models.resnet import ResNet18, load_encoder_weights
-from src.libs.data_loading import load_classification_data, create_dataset
+from src.libs.data_loading import create_dataset
 
 
 def train_model(model, train_dataset, val_dataset, epochs=10):
@@ -57,14 +57,10 @@ if __name__ == "__main__":
         print("Loading model weights...")
         load_encoder_weights(model, pretrained_model)
 
-    # Load classification data
+    # Load data and create dataset
     print("Loading data and creating dataset...")
-    train_images, train_labels = load_classification_data(data_dir, split_list_file=os.path.join(metadata_dir, 'train.txt'))
-    val_images, val_labels = load_classification_data(data_dir, split_list_file=os.path.join(metadata_dir, 'val.txt'))
-
-    # Create dataset
-    train_dataset = create_dataset(train_images, train_labels, batch_size=32)
-    val_dataset = create_dataset(val_images, val_labels, batch_size=32)
+    train_dataset = create_dataset(data_dir, split_list_file=os.path.join(metadata_dir, 'train.txt'), batch_size=32)
+    val_dataset = create_dataset(data_dir, split_list_file=os.path.join(metadata_dir, 'val.txt'), batch_size=32)
 
     # Train the model
     print("Training the model...")

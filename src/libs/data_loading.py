@@ -19,12 +19,20 @@ def objects_to_labels(objects, num_classes=20):
         labels[pascal_label2int[obj]] = 1
     return labels
 
+def parse_function(filename, label, data_dir):
+    """Load image from filename."""
+    # Load the image from file
+    filename = filename.numpy().decode("utf-8")
+    data_dir = data_dir.numpy().decode("utf-8")
+    image = np.load(os.path.join(data_dir, "classification", f"{filename}.npy"))
+    return image, label
+
 
 def load_classification_data(data_dir, split_list_file):
-    """Load preprocessed data for the classification task."""
+    """Create a tf.data.Dataset for the classification task."""
     task_dir = os.path.join(data_dir, "classification")
 
-    # Read data.json file containing image names and its corresponding objects
+    # Read data.json file containing image names and corresponding objects
     with open(os.path.join(task_dir, 'data.json'), 'r') as file:
         annotations = json.load(file)
 
@@ -32,18 +40,27 @@ def load_classification_data(data_dir, split_list_file):
     with open(split_list_file) as file:
         split_files = [line.rstrip() for line in file]
 
-    images = []
+    # Create list of (filename, label) pairs
+    filenames = []
     labels = []
-    # For each input in the split, load preprocessed image and its labels
     for filename in split_files:
-        objects = annotations[filename]
-        images.append(np.load(os.path.join(task_dir, f'{filename}.npy')))
-        labels.append(objects_to_labels(objects, num_classes=len(pascal_voc_classes)))
+        filenames.append(filename)
+        labels.append(objects_to_labels(annotations[filename]))
 
-    return np.array(images), np.array(labels)
+    labels = np.array(labels).astype(np.float32)
+
+    # Create a tf.data.Dataset from filenames and labels
+    dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
+    dataset = dataset.map(lambda filename, label: tf.py_function(
+        func=parse_function,
+        inp=[filename, label, data_dir],
+        Tout=(tf.float32, tf.float32)
+    ), num_parallel_calls=tf.data.AUTOTUNE)
+
+    return dataset
 
 
-def create_dataset(images, labels, batch_size):
-    """Create a TensorFlow dataset from images and labels."""
-    dataset = tf.data.Dataset.from_tensor_slices((images, labels))
+def create_dataset(data_dir, split_list_file, batch_size):
+    """Load the data and prepare it as a batched tf.data.Dataset."""
+    dataset = load_classification_data(data_dir, split_list_file)
     return dataset.shuffle(10000).batch(batch_size).prefetch(tf.data.AUTOTUNE)
