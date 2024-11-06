@@ -2,23 +2,14 @@
 import os
 import sys
 import tensorflow as tf
+import numpy as np
 
 # Add the project root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.models.resnet import ResNet18, load_encoder_weights
 from src.libs.data_loading import create_dataset
 
-
-def train_model(model, train_dataset, val_dataset, epochs=10):
-    """Train the model on the classification task with two phases."""
-
-    # Phase 1: Train with frozen encoder for 1 epoch
-    print("\nPhase 1: Training with frozen encoder...")
-    # Freeze encoder layers
-    for layer in model.layers:
-        if not isinstance(layer, tf.keras.layers.Dense):
-            layer.trainable = False
-
+def train_model(model, train_dataset, val_dataset, epochs=10, initial_epoch=0):
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-4),
         loss=tf.keras.losses.BinaryCrossentropy(from_logits=False, label_smoothing=0.1),
@@ -31,33 +22,7 @@ def train_model(model, train_dataset, val_dataset, epochs=10):
         ],
     )
 
-    # Train for 1 epoch
-    history1 = model.fit(
-        train_dataset,
-        validation_data=val_dataset,
-        epochs=1,
-        verbose=1,
-    )
-
-    # Phase 2: Train with unfrozen encoder for remaining epochs
-    print("\nPhase 2: Training with unfrozen encoder...")
-    # Unfreeze encoder layers
-    for layer in model.layers:
-        layer.trainable = True
-
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(1e-4),
-        loss=tf.keras.losses.BinaryCrossentropy(from_logits=False, label_smoothing=0.1),
-        metrics=[
-            tf.keras.metrics.BinaryAccuracy(),
-            tf.keras.metrics.Precision(),
-            tf.keras.metrics.Recall(),
-            tf.keras.metrics.AUC(multi_label=True, name="auc_roc"),
-            tf.keras.metrics.AUC(curve="PR", name="average_precision"),
-        ],
-    )
-
-    # Create callbacks for the second phase
+    # Create callbacks for training
     early_stopping = tf.keras.callbacks.EarlyStopping(
         monitor="val_loss", min_delta=0, patience=5, verbose=1, mode="auto"
     )
@@ -73,15 +38,38 @@ def train_model(model, train_dataset, val_dataset, epochs=10):
         monitor="val_loss", factor=0.5, patience=3, verbose=1, mode="auto"
     )
 
-    # Train for remaining epochs
-    history2 = model.fit(
+    # Train the model
+    history = model.fit(
         train_dataset,
         validation_data=val_dataset,
-        initial_epoch=1,  # Start from epoch 1
-        epochs=epochs,  # Train until final epoch
+        initial_epoch=initial_epoch,
+        epochs=epochs,
         verbose=1,
         callbacks=[early_stopping, checkpoint, reduceLRcallback],
     )
+
+    return model, history
+
+
+def train_two_phases(model, train_dataset, val_dataset, epochs=10):
+    """Train the model on the classification task with two phases."""
+
+    # Phase 1: Train with frozen encoder for 1 epoch
+    print("\nPhase 1: Training with frozen encoder...")
+    # Freeze encoder layers
+    for layer in model.layers:
+        if not isinstance(layer, tf.keras.layers.Dense):
+            layer.trainable = False
+
+    model, history1 = train_model(model, train_dataset, val_dataset, epochs=1, initial_epoch=0)
+
+    # Phase 2: Train with unfrozen encoder for remaining epochs
+    print("\nPhase 2: Training with unfrozen encoder...")
+    # Unfreeze encoder layers
+    for layer in model.layers:
+        layer.trainable = True
+
+    model, history2 = train_model(model, train_dataset, val_dataset, epochs=epochs, initial_epoch=1)
 
     # Combine histories
     combined_history = {}
@@ -96,6 +84,7 @@ if __name__ == "__main__":
     data_dir = os.path.join(data_path, "processed", "pascal_voc")
     metadata_dir = os.path.join(data_path, "pascal_voc", "ImageSets", "Main")
     pretrained_model = None #os.path.join("models", "checkpoints_resnet18_mae", "best_model.h5")
+    two_phases_train = True # set to True to freeze encoder in the first epoch
 
     model = ResNet18((224, 224, 3), mode="classification")
     print(model.summary())
@@ -115,7 +104,10 @@ if __name__ == "__main__":
 
     # Train the model
     print("Training the model...")
-    fine_tuned_model, history = train_model(model, train_dataset, val_dataset)
+    if two_phases_train:
+        fine_tuned_model, history = train_two_phases(model, train_dataset, val_dataset)
+    else:
+        fine_tuned_model, history = train_model(model, train_dataset, val_dataset)
 
     # Save the model
     os.makedirs("models", exist_ok=True)
