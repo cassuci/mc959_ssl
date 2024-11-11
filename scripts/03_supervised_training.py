@@ -9,10 +9,29 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.models.resnet import ResNet18, load_encoder_weights
 from src.libs.data_loading import create_dataset
 
+
+def weighted_binary_cross_entropy(weights: dict, from_logits: bool = False):
+    assert 0 in weights
+    assert 1 in weights
+
+    def weighted_cross_entropy_fn(y_true, y_pred):
+        tf_y_true = tf.cast(y_true, dtype=y_pred.dtype)
+        tf_y_pred = tf.cast(y_pred, dtype=y_pred.dtype)
+
+        weights_v = tf.where(tf.equal(tf_y_true, 1), weights[1], weights[0])
+        weights_v = tf.cast(weights_v, dtype=y_pred.dtype)
+        ce = tf.keras.backend.binary_crossentropy(tf_y_true, tf_y_pred, from_logits=from_logits)
+        loss = tf.keras.backend.mean(tf.multiply(ce, weights_v))
+        return loss
+
+    return weighted_cross_entropy_fn
+
+
 def train_model(model, train_dataset, val_dataset, epochs=10, initial_epoch=0):
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-4),
-        loss=tf.keras.losses.BinaryCrossentropy(from_logits=False, label_smoothing=0.1),
+        loss=weighted_binary_cross_entropy(weights={0: 1., 1: 9.}, from_logits=False),
+        #loss=tf.keras.losses.BinaryCrossentropy(from_logits=False, label_smoothing=0.1),
         metrics=[
             tf.keras.metrics.BinaryAccuracy(),
             tf.keras.metrics.Precision(),
