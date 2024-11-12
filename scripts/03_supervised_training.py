@@ -6,7 +6,7 @@ import numpy as np
 
 # Add the project root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from src.models.resnet import ResNet18, load_encoder_weights
+from src.models.resnet import ResNet18, ResNet50, load_encoder_weights
 from src.libs.data_loading import create_dataset
 
 
@@ -30,8 +30,8 @@ def weighted_binary_cross_entropy(weights: dict, from_logits: bool = False):
 def train_model(model, train_dataset, val_dataset, epochs=10, initial_epoch=0):
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-4),
-        loss=weighted_binary_cross_entropy(weights={0: 1., 1: 9.}, from_logits=False),
-        #loss=tf.keras.losses.BinaryCrossentropy(from_logits=False, label_smoothing=0.1),
+        loss=weighted_binary_cross_entropy(weights={0: 1.0, 1: 9.0}, from_logits=False),
+        # loss=tf.keras.losses.BinaryCrossentropy(from_logits=False, label_smoothing=0.1),
         metrics=[
             tf.keras.metrics.BinaryAccuracy(),
             tf.keras.metrics.Precision(),
@@ -46,7 +46,7 @@ def train_model(model, train_dataset, val_dataset, epochs=10, initial_epoch=0):
         monitor="val_loss", min_delta=0, patience=5, verbose=1, mode="auto"
     )
     checkpoint = tf.keras.callbacks.ModelCheckpoint(
-        "models/baseline/model_epoch_{epoch:02d}_loss_{val_loss:.2f}.h5",
+        "models/finetune_resnet50_new_loss/model_epoch_{epoch:02d}_loss_{val_loss:.2f}.h5",
         monitor="val_loss",
         verbose=1,
         save_best_only=True,
@@ -88,24 +88,29 @@ def train_two_phases(model, train_dataset, val_dataset, epochs=10):
     for layer in model.layers:
         layer.trainable = True
 
-    model, history2 = train_model(model, train_dataset, val_dataset, epochs=epochs, initial_epoch=1)
+    model, history2 = train_model(
+        model, train_dataset, val_dataset, epochs=epochs, initial_epoch=1
+    )
 
     # Combine histories
     combined_history = {}
     for key in history1.history:
-        combined_history[key] = history1.history[key] + history2.history[key]
+        try:
+            combined_history[key] = history1.history[key] + history2.history[key]
+        except:
+            combined_history[key] = history1.history[key] + history2.history[key + "_1"]
 
     return model, combined_history
 
 
 if __name__ == "__main__":
-    data_path = "ssl_images/data"   # "/mnt/f/ssl_images/data" if you're Gabriel 
+    data_path = "/mnt/f/ssl_images/data"  # ssl_images/data  if you're Letriça
     data_dir = os.path.join(data_path, "processed", "pascal_voc")
     metadata_dir = os.path.join(data_path, "pascal_voc", "ImageSets", "Main")
-    pretrained_model = None #os.path.join("models", "checkpoints_resnet18_mae", "best_model.h5")
-    two_phases_train = True # set to True to freeze encoder in the first epoch
+    pretrained_model = os.path.join("models", "checkpoints_resnet18_mae", "best_model.h5")  # None
+    two_phases_train = True  # set to True to freeze encoder in the first epoch
 
-    model = ResNet18((224, 224, 3), mode="classification")
+    model = ResNet50((224, 224, 1), mode="classification")
     print(model.summary())
 
     if pretrained_model:
@@ -130,7 +135,7 @@ if __name__ == "__main__":
 
     # Save the model
     os.makedirs("models", exist_ok=True)
-    save_path = os.path.join("models", "baseline_resnet18.h5")
+    save_path = os.path.join("models", "finetune_resnet50_new_loss.h5")
     fine_tuned_model.save_weights(save_path)
     print(f"Final model saved to {save_path}")
     print("Supervised training completed successfully!")

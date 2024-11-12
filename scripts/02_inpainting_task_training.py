@@ -14,21 +14,21 @@ def get_latest_checkpoint(checkpoint_dir):
     """Find the latest checkpoint file and extract its epoch number."""
     if not os.path.exists(checkpoint_dir):
         return None, 0
-    
+
     checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "model_epoch_*.h5"))
-    
+
     if not checkpoint_files:
         return None, 0
-        
+
     epoch_numbers = []
     for f in checkpoint_files:
-        match = re.search(r'model_epoch_(\d+)\.h5', f)
+        match = re.search(r"model_epoch_(\d+)\.h5", f)
         if match:
             epoch_numbers.append((int(match.group(1)), f))
-    
+
     if not epoch_numbers:
         return None, 0
-        
+
     latest_epoch, latest_file = max(epoch_numbers, key=lambda x: x[0])
     return latest_file, latest_epoch
 
@@ -139,26 +139,26 @@ class MaskedInpaintingLoss(tf.keras.losses.Loss):
         self.mae = tf.keras.losses.MeanAbsoluteError(reduction=tf.keras.losses.Reduction.NONE)
         self.vgg_weight = vgg_weight
         self.l1_weight = l1_weight
-        
+
     def call(self, y_true, y_pred, mask):
         # Compute L1 loss only on masked regions
         pixel_l1_loss = self.mae(y_true, y_pred)
         masked_l1_loss = tf.reduce_sum(pixel_l1_loss * mask) / (tf.reduce_sum(mask) + 1e-8)
-        
+
         # VGG perceptual loss on masked regions
         vgg_true = self.vgg_model(y_true)
         vgg_pred = self.vgg_model(y_pred)
-        
+
         perceptual_loss = 0
         for pt, pp in zip(vgg_true, vgg_pred):
             # Resize mask to match feature map size
-            curr_mask = tf.image.resize(mask, pt.shape[1:3], method='nearest')
+            curr_mask = tf.image.resize(mask, pt.shape[1:3], method="nearest")
             curr_mask = tf.repeat(curr_mask, pt.shape[-1], axis=-1)
-            
+
             # Compute masked feature difference
             feat_diff = tf.square(pt - pp) * curr_mask
             perceptual_loss += tf.reduce_sum(feat_diff) / (tf.reduce_sum(curr_mask) + 1e-8)
-            
+
         # Combine losses
         total_loss = (self.l1_weight * masked_l1_loss) + (self.vgg_weight * perceptual_loss)
         return total_loss
@@ -231,10 +231,10 @@ def train_inpainting(data_dir, model, epochs=100, batch_size=16, checkpoint_dir=
     """Main training function for inpainting with validation and perceptual loss."""
     if checkpoint_dir is None:
         checkpoint_dir = os.path.join("models", "checkpoints")
-    
+
     # Find latest checkpoint and epoch
     latest_checkpoint, initial_epoch = get_latest_checkpoint(checkpoint_dir)
-    
+
     if latest_checkpoint:
         print(f"Found checkpoint at epoch {initial_epoch}, resuming training...")
         model.load_weights(latest_checkpoint)
@@ -243,10 +243,16 @@ def train_inpainting(data_dir, model, epochs=100, batch_size=16, checkpoint_dir=
         initial_epoch = 0
 
     # Get train and validation file paths
-    (train_masked, train_original, train_mask), (val_masked, val_original, val_mask) = get_file_paths(data_dir)
+    (train_masked, train_original, train_mask), (
+        val_masked,
+        val_original,
+        val_mask,
+    ) = get_file_paths(data_dir)
 
     # Create datasets
-    train_dataset = create_dataset(train_masked, train_original, train_mask, batch_size, shuffle=True)
+    train_dataset = create_dataset(
+        train_masked, train_original, train_mask, batch_size, shuffle=True
+    )
     val_dataset = create_dataset(val_masked, val_original, val_mask, batch_size, shuffle=False)
 
     # Calculate steps per epoch
@@ -270,7 +276,7 @@ def train_inpainting(data_dir, model, epochs=100, batch_size=16, checkpoint_dir=
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4),
         loss=loss_fn,
-        metrics=[masked_mae_metric]
+        metrics=[masked_mae_metric],
     )
 
     # Add callbacks
@@ -309,10 +315,12 @@ if __name__ == "__main__":
     checkpoint_dir = os.path.join("models", "checkpoints")
 
     # Initialize model
-    model = ResNet18((224, 224, 3), mode='inpainting')
+    model = ResNet18((224, 224, 3), mode="inpainting")
 
     print("Training inpainting model...")
-    history = train_inpainting(data_dir, model, epochs=100, batch_size=24, checkpoint_dir=checkpoint_dir)
+    history = train_inpainting(
+        data_dir, model, epochs=100, batch_size=24, checkpoint_dir=checkpoint_dir
+    )
 
     # Save the final model
     save_path = os.path.join("models", "inpainting_model_final.h5")

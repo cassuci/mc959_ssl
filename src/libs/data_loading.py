@@ -4,9 +4,28 @@ import numpy as np
 import tensorflow as tf
 
 
-pascal_voc_classes = ['person', 'bird', 'cat', 'cow', 'dog', 'horse', 'sheep',
-                      'aeroplane', 'bicycle', 'boat', 'bus', 'car', 'motorbike', 'train',
-                      'bottle', 'chair', 'diningtable', 'pottedplant', 'sofa', 'tvmonitor']
+pascal_voc_classes = [
+    "person",
+    "bird",
+    "cat",
+    "cow",
+    "dog",
+    "horse",
+    "sheep",
+    "aeroplane",
+    "bicycle",
+    "boat",
+    "bus",
+    "car",
+    "motorbike",
+    "train",
+    "bottle",
+    "chair",
+    "diningtable",
+    "pottedplant",
+    "sofa",
+    "tvmonitor",
+]
 pascal_label2int = {label: index for index, label in enumerate(pascal_voc_classes)}
 pascal_int2label = {index: label for index, label in enumerate(pascal_voc_classes)}
 
@@ -19,27 +38,29 @@ def objects_to_labels(objects, num_classes=20):
         labels[pascal_label2int[obj]] = 1
     return labels
 
+
 def parse_function(filename, label, data_dir):
     """Load image from filename and average all 3 channels into a single channel."""
     # Load the image from file
     filename = filename.numpy().decode("utf-8")
     data_dir = data_dir.numpy().decode("utf-8")
     image = np.load(os.path.join(data_dir, "classification", f"{filename}.npy"))
-    
+
     # Average the three channels
-    #image_mean = np.mean(image, axis=-1)  # Average across the last dimension (channels)
-    
+    image_mean = np.mean(image, axis=-1)  # Average across the last dimension (channels)
+
     # Expand dimensions to make it (height, width, 1)
-    #image_mean = np.expand_dims(image_mean, axis=-1)  # Add a new axis for the single channel
-    
-    return image, label
+    image_mean = np.expand_dims(image_mean, axis=-1)  # Add a new axis for the single channel
+
+    return image_mean, label
+
 
 def load_classification_data(data_dir, split_list_file):
     """Create a tf.data.Dataset for the classification task."""
     task_dir = os.path.join(data_dir, "classification")
 
     # Read data.json file containing image names and corresponding objects
-    with open(os.path.join(task_dir, 'data.json'), 'r') as file:
+    with open(os.path.join(task_dir, "data.json"), "r") as file:
         annotations = json.load(file)
 
     # Read train.txt or val.txt file containing list of images for each split
@@ -57,11 +78,12 @@ def load_classification_data(data_dir, split_list_file):
 
     # Create a tf.data.Dataset from filenames and labels
     dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
-    dataset = dataset.map(lambda filename, label: tf.py_function(
-        func=parse_function,
-        inp=[filename, label, data_dir],
-        Tout=(tf.float32, tf.float32)
-    ), num_parallel_calls=tf.data.AUTOTUNE)
+    dataset = dataset.map(
+        lambda filename, label: tf.py_function(
+            func=parse_function, inp=[filename, label, data_dir], Tout=(tf.float32, tf.float32)
+        ),
+        num_parallel_calls=tf.data.AUTOTUNE,
+    )
 
     return dataset
 

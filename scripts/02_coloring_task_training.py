@@ -10,30 +10,31 @@ import re
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.models.resnet import ResNet18, ResNet50
 
+
 def get_latest_checkpoint(checkpoint_dir):
     """Find the latest checkpoint file and extract its epoch number."""
     if not os.path.exists(checkpoint_dir):
         return None, 0
-    
+
     # Look for epoch checkpoints
     checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "model_epoch_*.h5"))
-    
+
     if not checkpoint_files:
         return None, 0
-        
+
     # Extract epoch numbers and find the latest one
     epoch_numbers = []
     for f in checkpoint_files:
-        match = re.search(r'model_epoch_(\d+)\.h5', f)
+        match = re.search(r"model_epoch_(\d+)\.h5", f)
         if match:
             epoch_numbers.append((int(match.group(1)), f))
-    
+
     if not epoch_numbers:
         return None, 0
-        
+
     # Get the latest epoch checkpoint
     latest_epoch, latest_file = max(epoch_numbers, key=lambda x: x[0])
-    
+
     return latest_file, latest_epoch
 
 
@@ -79,7 +80,7 @@ def load_image(file_path):
         img = np.load(file_path)
 
         # Preprocess the image
-        img = tf.cast(img, tf.float32) #/ 255.0
+        img = tf.cast(img, tf.float32)  # / 255.0
 
         if "gray" in file_path:
             # Ensure grayscale input is 1 channel
@@ -87,14 +88,14 @@ def load_image(file_path):
                 img = tf.image.rgb_to_grayscale(img)
         else:
             L, a, b = tf.unstack(img, axis=-1)
-    
+
             # Scale L channel to [0, 1]
             L = L / 100.0
-            
+
             # Scale a and b channels to [0, 1]
             a = (a + 128.0) / 255.0  # Scale a from [-128, 127] to [0, 1]
             b = (b + 128.0) / 255.0  # Scale b from [-128, 127] to [0, 1]
-            
+
             # Stack channels back together
             img = tf.stack([L, a, b], axis=-1)
 
@@ -226,7 +227,7 @@ class ColorizationLoss(tf.keras.losses.Loss):
         self.mae = tf.keras.losses.MeanAbsoluteError()
         self.vgg_weight = vgg_weight
         self.l1_weight = l1_weight
-    
+
     @staticmethod
     def inverse_scale_output(batch):
         # Ensure the batch has the expected shape
@@ -251,7 +252,7 @@ class ColorizationLoss(tf.keras.losses.Loss):
         lab = tf.image.convert_image_dtype(lab, dtype=tf.float32)
         rgb = tf.image.convert_image_dtype(tfio.experimental.color.lab_to_rgb(lab), dtype=tf.uint8)
         return tf.image.convert_image_dtype(rgb, dtype=tf.float32)
-        
+
     def call(self, y_true, y_pred):
         # Ensure inputs have correct shape and data type
         y_true = tf.cast(y_true, tf.float32)
@@ -279,15 +280,14 @@ class ColorizationLoss(tf.keras.losses.Loss):
         return total_loss
 
 
-
 def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_dir=None):
     """Main training function for colorization with validation and perceptual loss."""
     if checkpoint_dir is None:
         checkpoint_dir = os.path.join("models", "checkpoints")
-    
+
     # Find latest checkpoint and epoch
     latest_checkpoint, initial_epoch = get_latest_checkpoint(checkpoint_dir)
-    
+
     if latest_checkpoint:
         print(f"Found checkpoint at epoch {initial_epoch}, resuming training...")
         model.load_weights(latest_checkpoint)
@@ -324,7 +324,7 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_di
         _, a, b = tf.split(y_true, 3, axis=-1)
         y_true = tf.concat([a, b], axis=-1)
         return tf.reduce_mean(tf.abs(y_true - y_pred))
-    
+
     def l2_metric(y_true, y_pred):
         _, a, b = tf.split(y_true, 3, axis=-1)
         y_true = tf.concat([a, b], axis=-1)
@@ -332,10 +332,10 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_di
 
     # Compile model with custom loss
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4, clipnorm=1), 
-        loss=loss_fn, 
-        #loss=l1_metric,
-        metrics=[l1_metric, l2_metric]
+        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4, clipnorm=1),
+        loss=loss_fn,
+        # loss=l1_metric,
+        metrics=[l1_metric, l2_metric],
     )
 
     # Add callbacks
@@ -374,10 +374,12 @@ if __name__ == "__main__":
     checkpoint_dir = os.path.join("models", "checkpoints")
 
     # Initialize model
-    model = ResNet50((224, 224, 1), mode='colorization')
+    model = ResNet50((224, 224, 1), mode="colorization")
 
     print("Training colorization model...")
-    history = train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_dir=checkpoint_dir)
+    history = train_colorization(
+        data_dir, model, epochs=100, batch_size=16, checkpoint_dir=checkpoint_dir
+    )
 
     # Save the final model
     save_path = os.path.join("models", "colorization_model_resnet50.h5")

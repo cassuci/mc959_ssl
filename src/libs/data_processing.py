@@ -1,6 +1,8 @@
 import numpy as np
 from PIL import Image
 import tensorflow as tf
+import json
+import pycocotools.mask as mask_util
 
 
 def load_image(image_path):
@@ -34,6 +36,35 @@ def create_inpainting_task(image, mask_size=50):
     mask[y : y + mask_size, x : x + mask_size, :] = 0
     masked_image = image_array * mask
     return masked_image, mask
+
+
+def create_segmentation_task(image, annotations):
+    """
+    Create a segmentation task by generating a multi-class segmentation mask for the input image.
+
+    Parameters:
+    image_path (str): The file path to the input image.
+    annotations_path (str): The file path to the COCO annotations JSON file.
+
+    Returns:
+    numpy.ndarray: The original image.
+    numpy.ndarray: The multi-class segmentation mask with shape (height, width, num_classes).
+    """
+
+    # Create the segmentation mask
+    height, width = image.shape[:2]
+    num_classes = len(set([ann["category_id"] for ann in annotations["annotations"]]))
+    segmentation_mask = np.zeros((height, width, num_classes), dtype=np.uint8)
+
+    for annotation in annotations["annotations"]:
+        category_id = annotation["category_id"]
+        segmentation = annotation["segmentation"]
+        binary_mask = mask_util.decode({"size": [height, width], "counts": segmentation.encode()})
+        segmentation_mask[:, :, category_id - 1] = np.maximum(
+            segmentation_mask[:, :, category_id - 1], binary_mask
+        )
+
+    return segmentation_mask
 
 
 def create_colorization_task(image):
