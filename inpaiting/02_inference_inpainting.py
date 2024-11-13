@@ -11,7 +11,7 @@ from typing import List, Tuple
 from tqdm import tqdm
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from models.resnet import ResNet18
+from model.resnet import ResNet18
 
 
 os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'

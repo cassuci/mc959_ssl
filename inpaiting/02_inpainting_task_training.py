@@ -8,7 +8,7 @@ from abc import ABCMeta
 from typing import Tuple, List
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from models.resnet import ResNet18
+from model.resnet import ResNet18
 
 
 def generate_coco_dataset_descriptor(
@@ -158,7 +158,7 @@ if __name__ == "__main__":
     
     args = get_args()
     
-    os.makedirs("models/checkpoints/", exist_ok=False)
+    os.makedirs("model/checkpoints/", exist_ok=False)
     
     dataset_descriptor = generate_coco_dataset_descriptor(args.train_dir)
 
@@ -183,10 +183,10 @@ if __name__ == "__main__":
             monitor="val_loss", factor=0.5, patience=10, min_lr=1e-6
         ),
         tf.keras.callbacks.ModelCheckpoint(
-            "models/checkpoints/" + "weights-{epoch:03d}-{val_loss:.4f}.weights.h5", monitor='val_loss',
+            "model/checkpoints/" + "weights-{epoch:03d}-{val_loss:.4f}.weights.h5", monitor='val_loss',
             save_best_only=True, verbose=1, mode='min', save_weights_only=True
         ),
-        tf.keras.callbacks.TensorBoard(log_dir="models/checkpoints")
+        tf.keras.callbacks.TensorBoard(log_dir="model/checkpoints")
     ]
     callbacks = tf.keras.callbacks.CallbackList(_callbacks, add_history=True, model=model)
 
