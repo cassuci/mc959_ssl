@@ -57,7 +57,8 @@ def prepare_coco_data(data_dir, output_dir, split="train", num_samples=None):
 
     coco = COCO(annotations_path)
     img_ids = coco.getImgIds()
-    img_ids = img_ids[:num_samples]
+    if num_samples is not None:
+        img_ids = img_ids[:num_samples]
 
     catIds = coco.getCatIds(catNms=["person", "car", "chair", "book", "bottle", "cup", "dining table", "traffic light", "bowl", "handbag"])
     cat_names = [cat["name"] for cat in coco.loadCats(catIds)]
@@ -69,6 +70,6 @@ if __name__ == "__main__":
     coco_dir = os.path.join("/mnt/f/ssl_images/data", "coco")
     output_dir = os.path.join("/mnt/f/ssl_images/data", "processed")
 
-    prepare_coco_data(coco_dir, output_dir, "train", num_samples=10000)
-    prepare_coco_data(coco_dir, output_dir, "val", num_samples=2000)
+    prepare_coco_data(coco_dir, output_dir, "train", num_samples=None)
+    prepare_coco_data(coco_dir, output_dir, "val", num_samples=None)
     print("Data preparation completed successfully!")

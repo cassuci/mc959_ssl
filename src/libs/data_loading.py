@@ -39,23 +39,26 @@ def objects_to_labels(objects, num_classes=20):
     return labels
 
 
-def parse_function(filename, label, data_dir):
+def parse_function(filename, label, data_dir, single_channel=False):
     """Load image from filename and average all 3 channels into a single channel."""
     # Load the image from file
     filename = filename.numpy().decode("utf-8")
     data_dir = data_dir.numpy().decode("utf-8")
     image = np.load(os.path.join(data_dir, "classification", f"{filename}.npy"))
 
-    # Average the three channels
-    image_mean = np.mean(image, axis=-1)  # Average across the last dimension (channels)
+    if single_channel:
+        # Average the three channels
+        image_mean = np.mean(image, axis=-1)  # Average across the last dimension (channels)
 
-    # Expand dimensions to make it (height, width, 1)
-    image_mean = np.expand_dims(image_mean, axis=-1)  # Add a new axis for the single channel
+        # Expand dimensions to make it (height, width, 1)
+        image_mean = np.expand_dims(image_mean, axis=-1)  # Add a new axis for the single channel
 
-    return image_mean, label
+        return image_mean, label
+    
+    return image, label
 
 
-def load_classification_data(data_dir, split_list_file):
+def load_classification_data(data_dir, split_list_file, single_channel=False):
     """Create a tf.data.Dataset for the classification task."""
     task_dir = os.path.join(data_dir, "classification")
 
@@ -80,7 +83,7 @@ def load_classification_data(data_dir, split_list_file):
     dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
     dataset = dataset.map(
         lambda filename, label: tf.py_function(
-            func=parse_function, inp=[filename, label, data_dir], Tout=(tf.float32, tf.float32)
+            func=parse_function, inp=[filename, label, data_dir, single_channel], Tout=(tf.float32, tf.float32)
         ),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
@@ -88,7 +91,7 @@ def load_classification_data(data_dir, split_list_file):
     return dataset
 
 
-def create_dataset(data_dir, split_list_file, batch_size):
+def create_dataset(data_dir, split_list_file, batch_size, single_channel=False):
     """Load the data and prepare it as a batched tf.data.Dataset."""
-    dataset = load_classification_data(data_dir, split_list_file)
+    dataset = load_classification_data(data_dir, split_list_file, single_channel)
     return dataset.shuffle(500).batch(batch_size).prefetch(tf.data.AUTOTUNE)

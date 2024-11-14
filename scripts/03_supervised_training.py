@@ -117,13 +117,15 @@ if __name__ == "__main__":
         print("Loading model weights...")
         load_encoder_weights(model, pretrained_model)
 
+    single_channel = (model.input_shape[-1] == 1)
+
     # Load data and create dataset
     print("Loading data and creating dataset...")
     train_dataset = create_dataset(
-        data_dir, split_list_file=os.path.join(metadata_dir, "train.txt"), batch_size=32
+        data_dir, split_list_file=os.path.join(metadata_dir, "train.txt"), batch_size=32, single_channel=single_channel
     )
     val_dataset = create_dataset(
-        data_dir, split_list_file=os.path.join(metadata_dir, "val.txt"), batch_size=32
+        data_dir, split_list_file=os.path.join(metadata_dir, "val.txt"), batch_size=32, single_channel=single_channel
     )
 
     # Train the model
