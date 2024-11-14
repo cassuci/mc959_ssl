@@ -63,21 +63,30 @@ Follow these steps to run the project:
 
 2. Prepare the data:
    ```
-   python scripts/01_data_preparation.py
+   python scripts/01_data_preparation_coco.py
+   ```
+   ```
+   python scripts/01_data_preparation_pascalvoc.py
    ```
    This script preprocesses the data for both pretext and downstream tasks.
 
 3. Train on pretext tasks:
    ```
-   python scripts/02_pretext_task_training.py
+   python scripts/02_inpainting_task_training.py
+   ```
+   ```
+   python scripts/02_coloring_task_training.py
    ```
    This trains the model on inpainting and colorization tasks.
 
 4. Fine-tune on downstream task:
    ```
-   python scripts/03_supervised_training.py
+   python scripts/03_classification_task_training.py
    ```
-   This fine-tunes the pre-trained model on the classification task.
+   ```
+   python scripts/03_segmentation_task_training.py
+   ```
+   This fine-tunes the pre-trained model on the classification and segmentation tasks.
 
 5. Evaluate the model:
    ```
