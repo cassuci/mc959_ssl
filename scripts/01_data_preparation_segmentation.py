@@ -6,19 +6,24 @@ from tqdm import tqdm
 import cv2
 import concurrent.futures
 
+
 def resize_image(image, size=(224, 224)):
     return cv2.resize(image, size)
+
 
 def normalize_image(image):
     """Normalize image values to range [0, 1]."""
     return np.array(image).astype(np.float32) / 255.0
 
+
 def resize_normalize(image):
     return resize_image(normalize_image(image))
+
 
 def is_color_image(image):
     """Check if the image has three channels (RGB)."""
     return image.ndim == 3 and image.shape[2] == 3
+
 
 def process_image(coco, data_dir, output_dir_segmentation, img_id, catIds, split):
     img_data = coco.loadImgs(img_id)[0]
@@ -50,6 +55,7 @@ def process_image(coco, data_dir, output_dir_segmentation, img_id, catIds, split
     np.save(os.path.join(output_dir_segmentation, f"inputgray_{img_id}.npy"), input_gray_image)
     np.save(os.path.join(output_dir_segmentation, f"mask_{img_id}.npy"), binary_masks)
 
+
 def prepare_coco_data(data_dir, output_dir, split="train", num_samples=None):
     annotations_path = os.path.join(data_dir, "annotations", f"instances_{split}2017.json")
     output_dir_segmentation = os.path.join(output_dir, "coco", "segmentation", f"{split}2017")
@@ -60,11 +66,36 @@ def prepare_coco_data(data_dir, output_dir, split="train", num_samples=None):
     if num_samples is not None:
         img_ids = img_ids[:num_samples]
 
-    catIds = coco.getCatIds(catNms=["person", "car", "chair", "book", "bottle", "cup", "dining table", "traffic light", "bowl", "handbag"])
+    catIds = coco.getCatIds(
+        catNms=[
+            "person",
+            "car",
+            "chair",
+            "book",
+            "bottle",
+            "cup",
+            "dining table",
+            "traffic light",
+            "bowl",
+            "handbag",
+        ]
+    )
     cat_names = [cat["name"] for cat in coco.loadCats(catIds)]
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        list(tqdm(executor.map(lambda img_id: process_image(coco, data_dir, output_dir_segmentation, img_id, catIds, split), img_ids), total=len(img_ids), desc=f"Preparing COCO data - {split}"))
+        list(
+            tqdm(
+                executor.map(
+                    lambda img_id: process_image(
+                        coco, data_dir, output_dir_segmentation, img_id, catIds, split
+                    ),
+                    img_ids,
+                ),
+                total=len(img_ids),
+                desc=f"Preparing COCO data - {split}",
+            )
+        )
+
 
 if __name__ == "__main__":
     coco_dir = os.path.join("/mnt/f/ssl_images/data", "coco")

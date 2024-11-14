@@ -6,6 +6,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from weights.load_weights import load_model_weights
 from weights.weights import weights_collection
 
+
 class ResNetBlock(tf.keras.Model):
     def __init__(self, filters, stride=1, name=None):
         super().__init__(name=name)
@@ -38,7 +39,7 @@ class ResNetBlock(tf.keras.Model):
 
 
 def upsample_block(x, skip_connection, filters, name_prefix):
-    x = tf.keras.layers.Conv2DTranspose(filters, 2, 2, activation='relu')(x)
+    x = tf.keras.layers.Conv2DTranspose(filters, 2, 2, activation="relu")(x)
 
     # Concatenate skip connection
     if skip_connection is not None:
@@ -57,9 +58,10 @@ def upsample_block(x, skip_connection, filters, name_prefix):
 
 
 def ResNet(input_shape, block_sizes, name="ResNet", mode="inpainting"):
-
-    assert mode in ['classification', 'inpainting'], \
-           "Invalid mode. Choose either 'classification', 'colorization' or 'inpainting'."
+    assert mode in [
+        "classification",
+        "inpainting",
+    ], "Invalid mode. Choose either 'classification', 'colorization' or 'inpainting'."
 
     inputs = tf.keras.Input(shape=input_shape)
 
@@ -80,14 +82,14 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="inpainting"):
             x = ResNetBlock(filters, stride=stride, name=f"block_{i}_{j}")(x)
         filters *= 2
 
-    if mode == 'classification':
+    if mode == "classification":
         x = tf.keras.layers.GlobalAveragePooling2D(name="avg_pool")(x)
-        #x = tf.keras.layers.Flatten(name='flatten')(x)
-        #x = tf.keras.layers.Dense(500, activation='relu', name='cls_1')(x)
-        #x = tf.keras.layers.Dense(500, activation='relu', name='cls_2')(x)
-        outputs = tf.keras.layers.Dense(20, activation='sigmoid', name="predictions")(x)
+        # x = tf.keras.layers.Flatten(name='flatten')(x)
+        # x = tf.keras.layers.Dense(500, activation='relu', name='cls_1')(x)
+        # x = tf.keras.layers.Dense(500, activation='relu', name='cls_2')(x)
+        outputs = tf.keras.layers.Dense(20, activation="sigmoid", name="predictions")(x)
 
-    elif mode == 'inpainting':
+    elif mode == "inpainting":
         # Decoder pathway with skip connections
         skips = skip_connections[::-1]  # Reverse skip connections
         decoder_filters = [256, 128, 64, 32, 16]
@@ -99,9 +101,9 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="inpainting"):
         # Final output layers
         x = tf.keras.layers.Conv2D(8, 3, padding="same", name="pre_output_conv")(x)
         x = tf.keras.layers.ReLU()(x)
-        outputs = tf.keras.layers.Conv2D(3, 3, padding="same", activation="sigmoid", name="output_conv")(
-            x
-        )
+        outputs = tf.keras.layers.Conv2D(
+            3, 3, padding="same", activation="sigmoid", name="output_conv"
+        )(x)
 
     return tf.keras.Model(inputs, outputs, name=name)
 
@@ -113,7 +115,5 @@ def load_encoder_weights(model, weights_path):
 
 def ResNet18(input_shape=(224, 224, 3), mode="classification"):
     model = ResNet(input_shape, [2, 2, 2, 2], name="ResNet18", mode=mode)
-    model = load_model_weights(
-        weights_collection, model, 1000, False, "resnet18"
-    )
+    model = load_model_weights(weights_collection, model, 1000, False, "resnet18")
     return model

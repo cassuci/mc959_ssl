@@ -54,7 +54,7 @@ def parse_function(filename, label, data_dir, single_channel=False):
         image_mean = np.expand_dims(image_mean, axis=-1)  # Add a new axis for the single channel
 
         return image_mean, label
-    
+
     return image, label
 
 
@@ -83,7 +83,9 @@ def load_classification_data(data_dir, split_list_file, single_channel=False):
     dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
     dataset = dataset.map(
         lambda filename, label: tf.py_function(
-            func=parse_function, inp=[filename, label, data_dir, single_channel], Tout=(tf.float32, tf.float32)
+            func=parse_function,
+            inp=[filename, label, data_dir, single_channel],
+            Tout=(tf.float32, tf.float32),
         ),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
