@@ -7,7 +7,7 @@ import numpy as np
 # Add the project root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.models.resnet import ResNet18, ResNet50, load_encoder_weights
-from src.libs.data_loading import create_dataset
+from src.libs.data_loading import create_dataset_classification
 
 
 def weighted_binary_cross_entropy(weights: dict, from_logits: bool = False):
@@ -121,13 +121,13 @@ if __name__ == "__main__":
 
     # Load data and create dataset
     print("Loading data and creating dataset...")
-    train_dataset = create_dataset(
+    train_dataset = create_dataset_classification(
         data_dir,
         split_list_file=os.path.join(metadata_dir, "train.txt"),
         batch_size=32,
         single_channel=single_channel,
     )
-    val_dataset = create_dataset(
+    val_dataset = create_dataset_classification(
         data_dir,
         split_list_file=os.path.join(metadata_dir, "val.txt"),
         batch_size=32,
