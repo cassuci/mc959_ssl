@@ -1,6 +1,7 @@
 import os
 import sys
 import tensorflow as tf
+import tensorflow.keras.backend as K 
 # Add the project root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.models.resnet import ResNet18, load_encoder_weights
@@ -11,11 +12,30 @@ from src.libs.data_loading import create_dataset_segmentation
 # - Add metrics
 # - Fix path to saved models
 
+def iou_metric(y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 10, threshold: float = 0.5):
+    class_iou = []
+    for class_idx in range(num_classes):
+        # Generate binary vector from predictions
+        y_pred = tf.where(y_pred > threshold, 1., 0.)
+
+        # Extract single class to compute IoU over
+        y_true_single_class = y_true[..., class_idx]
+        y_pred_single_class = y_pred[..., class_idx]
+
+        # Compute IoU
+        intersection = K.sum(y_true_single_class * y_pred_single_class)
+        union = K.sum(y_true_single_class) + K.sum(y_pred_single_class) - intersection
+
+        class_iou.append(K.switch(K.equal(union, 0.), 1., intersection / union))
+    
+    return sum(class_iou) / len(class_iou)
+
+
 def train_model(model, train_dataset, val_dataset, epochs=10, initial_epoch=0):
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-4),
         loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),
-        metrics=[],
+        metrics=[iou_metric],
     )
 
     # Create callbacks for training
