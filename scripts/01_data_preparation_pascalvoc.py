@@ -36,10 +36,12 @@ def get_pascal_voc_object_classes(xml_file):
     for obj in root.findall("object"):
         name = obj.find("name").text
         bndbox = obj.find("bndbox")
-        xmin = int(bndbox.find("xmin").text)
-        ymin = int(bndbox.find("ymin").text)
-        xmax = int(bndbox.find("xmax").text)
-        ymax = int(bndbox.find("ymax").text)
+
+        # Convert to float first, then to int (to handle possible floats in bounding boxes)
+        xmin = int(float(bndbox.find("xmin").text))
+        ymin = int(float(bndbox.find("ymin").text))
+        xmax = int(float(bndbox.find("xmax").text))
+        ymax = int(float(bndbox.find("ymax").text))
 
         objects.append({"name": name, "bbox": [xmin, ymin, xmax, ymax]})
 
