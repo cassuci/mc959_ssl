@@ -79,11 +79,11 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification"):
         filters *= 2
 
     if mode == 'classification':
-        x = tf.keras.layers.GlobalAveragePooling2D(name="avg_pool")(x)
+        x = tf.keras.layers.GlobalAveragePooling2D(name="avg_pool_cls")(x)
         #x = tf.keras.layers.Flatten(name='flatten')(x)
         #x = tf.keras.layers.Dense(500, activation='relu', name='cls_1')(x)
         #x = tf.keras.layers.Dense(500, activation='relu', name='cls_2')(x)
-        outputs = tf.keras.layers.Dense(20, activation='sigmoid', name="predictions")(x)
+        outputs = tf.keras.layers.Dense(20, activation='sigmoid', name="predictions_cls")(x)
 
     elif mode == 'segmentation':
         # Decoder pathway with skip connections

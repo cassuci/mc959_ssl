@@ -49,7 +49,8 @@ def parse_function_classification(filename, label, data_dir, single_channel=Fals
 
     if single_channel:
         # Average the three channels
-        image_mean = np.mean(image, axis=-1)  # Average across the last dimension (channels)
+        # image_mean = np.mean(image, axis=-1)  # Average across the last dimension (channels)
+        image_mean = np.dot(image[..., :3], [0.2989, 0.5870, 0.1140])
 
         # Expand dimensions to make it (height, width, 1)
         image_mean = np.expand_dims(image_mean, axis=-1)  # Add a new axis for the single channel
@@ -114,7 +115,8 @@ def parse_function_segmentation(image_path, mask_path, single_channel):
 
     if single_channel:
         # Average the three channels
-        image_mean = np.mean(image, axis=-1)  # Average across the last dimension (channels)
+        # image_mean = np.mean(image, axis=-1)  # Average across the last dimension (channels)
+        image_mean = np.dot(image[..., :3], [0.2989, 0.5870, 0.1140])
 
         # Expand dimensions to make it (height, width, 1)
         image_mean = np.expand_dims(image_mean, axis=-1)  # Add a new axis for the single channel
