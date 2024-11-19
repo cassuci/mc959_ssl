@@ -1,7 +1,8 @@
 import os
 import sys
 import tensorflow as tf
-import tensorflow.keras.backend as K 
+import tensorflow.keras.backend as K
+
 # Add the project root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.models.resnet import ResNet18, load_encoder_weights
@@ -12,11 +13,14 @@ from src.libs.data_loading import create_dataset_segmentation
 # - Add metrics
 # - Fix path to saved models
 
-def iou_metric(y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 10, threshold: float = 0.5):
+
+def iou_metric(
+    y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 10, threshold: float = 0.5
+):
     class_iou = []
     for class_idx in range(num_classes):
         # Generate binary vector from predictions
-        y_pred = tf.where(y_pred > threshold, 1., 0.)
+        y_pred = tf.where(y_pred > threshold, 1.0, 0.0)
 
         # Extract single class to compute IoU over
         y_true_single_class = y_true[..., class_idx]
@@ -26,8 +30,8 @@ def iou_metric(y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 10, thre
         intersection = K.sum(y_true_single_class * y_pred_single_class)
         union = K.sum(y_true_single_class) + K.sum(y_pred_single_class) - intersection
 
-        class_iou.append(K.switch(K.equal(union, 0.), 1., intersection / union))
-    
+        class_iou.append(K.switch(K.equal(union, 0.0), 1.0, intersection / union))
+
     return sum(class_iou) / len(class_iou)
 
 
@@ -101,25 +105,33 @@ def train_two_phases(model, train_dataset, val_dataset, epochs=10):
 
 
 if __name__ == "__main__":
-    data_path = "ssl_images/data"  # ssl_images/data  if you're Letriça
+    data_path = os.path.join("/mnt/f/ssl_images/data/")
     data_dir = os.path.join(data_path, "processed", "coco")
-    pretrained_model = None
-    two_phases_train = False  # set to True to freeze encoder in the first epoch
+    pretrained_model = os.path.join("models", "checkpoints_resnet18_vgg", "best_model.h5")
+    two_phases_train = True  # set to True to freeze encoder in the first epoch
 
-    model = ResNet18((224, 224, 3), mode="segmentation")
+    model = ResNet18((224, 224, 1), mode="segmentation")
     print(model.summary())
 
     if pretrained_model:
         print("Loading model weights...")
         load_encoder_weights(model, pretrained_model)
 
+    single_channel = model.input_shape[-1] == 1
+
     # Load data and create dataset
     print("Loading data and creating dataset...")
     train_dataset = create_dataset_segmentation(
-        data_dir, split='train', batch_size=32
+        data_dir,
+        split="train",
+        batch_size=32,
+        single_channel=single_channel,
     )
     val_dataset = create_dataset_segmentation(
-        data_dir, split='val', batch_size=32
+        data_dir,
+        split="val",
+        batch_size=32,
+        single_channel=single_channel,
     )
 
     # Train the model
@@ -131,7 +143,7 @@ if __name__ == "__main__":
 
     # Save the model
     os.makedirs("models", exist_ok=True)
-    save_path = os.path.join("models", "baseline_segmentation.h5")
+    save_path = os.path.join("models", "finetune_segmentation_resnet18_vgg.h5")
     trained_model.save_weights(save_path)
     print(f"Final model saved to {save_path}")
     print("Segmentation training completed successfully!")

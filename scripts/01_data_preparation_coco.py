@@ -58,7 +58,6 @@ def prepare_coco_data_colorization(data_dir, output_dir, num_samples=None):
         )  # Save LAB image
 
 
-
 def save_segmentation_arrays(coco, data_dir, output_dir_segmentation, img_id, catIds, split):
     img_data = coco.loadImgs(img_id)[0]
     img = io.imread(os.path.join(data_dir, f"{split}2017", img_data["file_name"]))

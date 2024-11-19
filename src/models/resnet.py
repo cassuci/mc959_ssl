@@ -92,12 +92,12 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification"):
 
         for i, filters in enumerate(decoder_filters):
             skip = skips[i] if i < len(skips) else None
-            x = upsample_block(x, skip, filters, f"decoder_{i}")
+            x = upsample_block(x, skip, filters, f"decoder_seg_{i}")
 
         # Final output layers
-        x = tf.keras.layers.Conv2D(8, 3, padding="same", name="pre_output_conv")(x)
+        x = tf.keras.layers.Conv2D(8, 3, padding="same", name="pre_output_conv_seg")(x)
         x = tf.keras.layers.LeakyReLU(0.2)(x)
-        outputs = tf.keras.layers.Conv2D(10, 3, padding="same", activation="sigmoid", name="output_conv")(
+        outputs = tf.keras.layers.Conv2D(10, 3, padding="same", activation="sigmoid", name="output_conv_seg")(
             x
         ) # TODO try softmax if there's no intersection between classes
 
