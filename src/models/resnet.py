@@ -47,10 +47,6 @@ def upsample_block(x, skip_connection, filters, name_prefix):
     x = tf.keras.layers.BatchNormalization(name=f"{name_prefix}_bn1")(x)
     x = tf.keras.layers.LeakyReLU(0.2)(x)
 
-    x = tf.keras.layers.Conv2D(filters, 3, padding="same", name=f"{name_prefix}_conv2")(x)
-    x = tf.keras.layers.BatchNormalization(name=f"{name_prefix}_bn2")(x)
-    x = tf.keras.layers.LeakyReLU(0.2)(x)
-
     return x
 
 
@@ -94,9 +90,7 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification"):
             skip = skips[i] if i < len(skips) else None
             x = upsample_block(x, skip, filters, f"decoder_seg_{i}")
 
-        # Final output layers
-        x = tf.keras.layers.Conv2D(8, 3, padding="same", name="pre_output_conv_seg")(x)
-        x = tf.keras.layers.LeakyReLU(0.2)(x)
+        # Final output layer
         outputs = tf.keras.layers.Conv2D(11, 3, padding="same", activation="softmax", name="output_conv_seg")(
             x
         )
@@ -111,9 +105,7 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification"):
             skip = skips[i] if i < len(skips) else None
             x = upsample_block(x, skip, filters, f"decoder_{i}")
 
-        # Final output layers
-        x = tf.keras.layers.Conv2D(8, 3, padding="same", name="pre_output_conv")(x)
-        x = tf.keras.layers.LeakyReLU(0.2)(x)
+        # Final output layer
         outputs = tf.keras.layers.Conv2D(2, 3, padding="same", activation="sigmoid", name="output_conv")(
             x
         )
