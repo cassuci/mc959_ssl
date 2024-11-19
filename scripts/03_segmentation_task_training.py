@@ -108,6 +108,7 @@ if __name__ == "__main__":
     data_path = os.path.join("/mnt/f/ssl_images/data/")
     data_dir = os.path.join(data_path, "processed", "coco")
     pretrained_model = os.path.join("models", "checkpoints_resnet18_vgg", "best_model.h5")
+    # pretrained_model = False
     two_phases_train = True  # set to True to freeze encoder in the first epoch
 
     model = ResNet18((224, 224, 1), mode="segmentation")
@@ -143,7 +144,7 @@ if __name__ == "__main__":
 
     # Save the model
     os.makedirs("models", exist_ok=True)
-    save_path = os.path.join("models", "finetune_segmentation_resnet18_vgg.h5")
+    save_path = os.path.join("models", "no_weights_finetune_segmentation_resnet18.h5")
     trained_model.save_weights(save_path)
     print(f"Final model saved to {save_path}")
     print("Segmentation training completed successfully!")

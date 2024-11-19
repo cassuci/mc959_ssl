@@ -148,6 +148,13 @@ def load_segmentation_data(data_dir, split="train", single_channel=False):
         if "mask" in filename
     ]
 
+    if split == "train":
+        images = images[:10000]
+        masks = masks[:10000]
+    else:
+        images = images[:2000]
+        masks = masks[:2000]
+
     # Create a tf.data.Dataset from filenames and labels
     dataset = tf.data.Dataset.from_tensor_slices((images, masks))
     dataset = dataset.map(
