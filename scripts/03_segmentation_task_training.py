@@ -3,6 +3,7 @@ import sys
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
+import re
 
 # Add the project root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -57,18 +58,18 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
             self.best_val_loss = float(np.load(best_loss_path))
 
     def _initialize_history(self):
-        return {
-            "loss": [],
-            "val_loss": [],
-            "iou_metric": [],
-            "val_iou_metric": [],
-        }
+        return {"loss": [], "val_loss": [], "iou_metric": [], "val_iou_metric": [], "lr": []}
 
     def on_epoch_end(self, epoch, logs=None):
-        # Update history
+        # Update history with available logs
+        logs = logs or {}
         for metric in self.history.keys():
             if metric in logs:
                 self.history[metric].append(logs[metric])
+            elif metric == "lr":
+                # Manually get current learning rate
+                lr = K.get_value(self.model.optimizer.learning_rate)
+                self.history["lr"].append(lr)
 
         # Save periodic checkpoint
         if (epoch + 1) % self.save_freq == 0:
@@ -92,47 +93,44 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
         np.save(history_path, self.history)
 
 
-def get_latest_checkpoint(checkpoint_dir):
-    """Find the latest checkpoint file and extract its epoch number."""
-    if not os.path.exists(checkpoint_dir):
-        return None, 0
-
-    # Look for epoch checkpoints
-    import glob
-    import re
-
-    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "segmentation_model_epoch_*.h5"))
-
-    if not checkpoint_files:
-        return None, 0
-
-    # Extract epoch numbers and find the latest one
-    epoch_numbers = []
-    for f in checkpoint_files:
-        match = re.search(r"segmentation_model_epoch_(\d+)\.h5", f)
-        if match:
-            epoch_numbers.append((int(match.group(1)), f))
-
-    if not epoch_numbers:
-        return None, 0
-
-    # Get the latest epoch checkpoint
-    latest_epoch, latest_file = max(epoch_numbers, key=lambda x: x[0])
-
-    return latest_file, latest_epoch
-
-
 def train_model(
-    model, train_dataset, val_dataset, epochs=10, initial_epoch=0, checkpoint_dir="models"
+    model,
+    train_dataset,
+    val_dataset,
+    epochs=10,
+    initial_epoch=0,
+    checkpoint_dir="models",
+    load_latest_checkpoint=True,
 ):
-    # Get latest checkpoint if exists
-    latest_checkpoint, loaded_initial_epoch = get_latest_checkpoint(checkpoint_dir)
+    # Ensure checkpoint directory exists
+    os.makedirs(checkpoint_dir, exist_ok=True)
 
-    if latest_checkpoint:
-        print(f"Found checkpoint at epoch {loaded_initial_epoch}, resuming training...")
-        model.load_weights(latest_checkpoint)
-        initial_epoch = loaded_initial_epoch
+    # Create a TensorFlow checkpoint
+    checkpoint = tf.train.Checkpoint(model=model)
+    checkpoint_manager = tf.train.CheckpointManager(
+        checkpoint, directory=checkpoint_dir, max_to_keep=5
+    )
 
+    # Determine if we should load the latest checkpoint
+    if load_latest_checkpoint:
+        latest_checkpoint = checkpoint_manager.latest_checkpoint
+        if latest_checkpoint:
+            try:
+                # Restore the checkpoint
+                checkpoint.restore(latest_checkpoint).expect_partial()
+
+                # Extract epoch number from checkpoint filename
+                epoch_match = re.search(r"ckpt-(\d+)", latest_checkpoint)
+                if epoch_match:
+                    initial_epoch = int(epoch_match.group(1))
+
+                print(f"Loaded checkpoint from epoch {initial_epoch}")
+            except Exception as e:
+                print(f"Error loading checkpoint: {e}")
+                print("Starting training from scratch...")
+                initial_epoch = 0
+
+    # Compile the model
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-4),
         loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),
@@ -140,8 +138,24 @@ def train_model(
     )
 
     # Create callbacks for training
+    class CustomCheckpointCallback(tf.keras.callbacks.Callback):
+        def __init__(self, checkpoint_dir):
+            super().__init__()
+            self.checkpoint_dir = checkpoint_dir
+
+        def on_epoch_end(self, epoch, logs=None):
+            # Save TensorFlow checkpoint
+            checkpoint_manager.save()
+
+            # Save H5 checkpoint
+            h5_path = os.path.join(
+                self.checkpoint_dir, f"segmentation_model_epoch_{epoch + 1:03d}.h5"
+            )
+            self.model.save_weights(h5_path)
+            print(f"\nSaved H5 checkpoint for epoch {epoch + 1}")
+
     callbacks = [
-        TrainingProgressCallback(checkpoint_dir=checkpoint_dir, save_freq=1),
+        CustomCheckpointCallback(checkpoint_dir),
         tf.keras.callbacks.EarlyStopping(
             monitor="val_loss", min_delta=0, patience=5, verbose=1, mode="auto"
         ),
@@ -163,26 +177,83 @@ def train_model(
     return model, history
 
 
+def get_latest_checkpoint(checkpoint_dir):
+    """Find the latest checkpoint file and extract its epoch number."""
+    # First, look for H5 checkpoints
+    import glob
+    import re
+
+    h5_files = sorted(
+        glob.glob(os.path.join(checkpoint_dir, "segmentation_model_epoch_*.h5")),
+        key=lambda x: int(re.search(r"epoch_(\d+)\.h5", x).group(1)),
+    )
+
+    # If H5 checkpoints exist, return the latest one
+    if h5_files:
+        latest_file = h5_files[-1]
+        latest_epoch = int(re.search(r"epoch_(\d+)\.h5", latest_file).group(1))
+        return latest_file, latest_epoch
+
+    # Fallback to TensorFlow checkpoints if no H5 found
+    latest_tf_checkpoint = tf.train.latest_checkpoint(checkpoint_dir)
+    if latest_tf_checkpoint:
+        epoch_match = re.search(r"ckpt-(\d+)", latest_tf_checkpoint)
+        epoch = int(epoch_match.group(1)) if epoch_match else 0
+        return latest_tf_checkpoint, epoch
+
+    # No checkpoints found
+    return None, 0
+
+
 def train_two_phases(model, train_dataset, val_dataset, epochs=10, checkpoint_dir="models"):
-    """Train the model on the classification task with two phases."""
+    """Train the model on the segmentation task with two phases."""
 
     # Phase 1: Train with frozen encoder for 1 epoch
     print("\nPhase 1: Training with frozen encoder...")
-    # Freeze encoder layers
+    # Freeze only the encoder layers (those named "block_*")
     for layer in model.layers:
-        if not isinstance(layer, tf.keras.layers.Dense):
+        if "block_" in layer.name:
             layer.trainable = False
+        else:
+            layer.trainable = True
 
+    # Recompile the model to ensure optimizer state matches trainability
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(1e-4),
+        loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),
+        metrics=[iou_metric],
+    )
+
+    # Create a separate checkpoint directory for phase 1
+    phase1_checkpoint_dir = os.path.join(checkpoint_dir, "phase1")
+    os.makedirs(phase1_checkpoint_dir, exist_ok=True)
+
+    # Train in Phase 1
     model, history1 = train_model(
-        model, train_dataset, val_dataset, epochs=1, initial_epoch=0, checkpoint_dir=checkpoint_dir
+        model,
+        train_dataset,
+        val_dataset,
+        epochs=1,
+        initial_epoch=0,
+        checkpoint_dir=phase1_checkpoint_dir,
+        load_latest_checkpoint=False,  # Prevent loading a checkpoint in the first phase
     )
 
     # Phase 2: Train with unfrozen encoder for remaining epochs
     print("\nPhase 2: Training with unfrozen encoder...")
-    # Unfreeze encoder layers
+    # Unfreeze all layers
     for layer in model.layers:
         layer.trainable = True
 
+    # Recompile the model again
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(1e-4),
+        loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),
+        metrics=[iou_metric],
+    )
+
+    # Train in Phase 2
+    # Use the main checkpoint directory for phase 2
     model, history2 = train_model(
         model,
         train_dataset,
@@ -195,10 +266,7 @@ def train_two_phases(model, train_dataset, val_dataset, epochs=10, checkpoint_di
     # Combine histories
     combined_history = {}
     for key in history1.history:
-        try:
-            combined_history[key] = history1.history[key] + history2.history[key]
-        except:
-            combined_history[key] = history1.history[key] + history2.history[key + "_1"]
+        combined_history[key] = history1.history[key] + history2.history[key]
 
     return model, combined_history
 
@@ -248,15 +316,26 @@ if __name__ == "__main__":
     print("Training the model...")
     if two_phases_train:
         trained_model, history = train_two_phases(
-            model, train_dataset, val_dataset, checkpoint_dir=checkpoint_dir
+            model,
+            train_dataset,
+            val_dataset,
+            checkpoint_dir=checkpoint_dir,
+            epochs=10,  # Specify total epochs for two-phase training
         )
     else:
         trained_model, history = train_model(
             model, train_dataset, val_dataset, checkpoint_dir=checkpoint_dir
         )
 
-    # Save the final model
-    save_path = os.path.join(checkpoint_dir, "final_segmentation_model.h5")
-    trained_model.save_weights(save_path)
-    print(f"Final model saved to {save_path}")
-    print("Segmentation training completed successfully!")
+    # Save the final model in both formats
+    # TensorFlow Checkpoint
+    final_tf_checkpoint_path = os.path.join(checkpoint_dir, "final_model")
+    checkpoint = tf.train.Checkpoint(model=trained_model)
+    checkpoint.save(final_tf_checkpoint_path)
+
+    # H5 Weights
+    final_h5_path = os.path.join(checkpoint_dir, "final_segmentation_model.h5")
+    trained_model.save_weights(final_h5_path)
+
+    print(f"Final model saved as TF checkpoint to {final_tf_checkpoint_path}")
+    print(f"Final model weights saved to {final_h5_path}")
