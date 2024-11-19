@@ -3,6 +3,7 @@ import json
 import numpy as np
 import tensorflow as tf
 
+# <------- Classification data loader functions ------->
 
 pascal_voc_classes = [
     "person",
@@ -39,7 +40,7 @@ def objects_to_labels(objects, num_classes=20):
     return labels
 
 
-def parse_function(filename, label, data_dir, single_channel=False):
+def parse_function_classification(filename, label, data_dir, single_channel=False):
     """Load image from filename and average all 3 channels into a single channel."""
     # Load the image from file
     filename = filename.numpy().decode("utf-8")
@@ -83,7 +84,7 @@ def load_classification_data(data_dir, split_list_file, single_channel=False):
     dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
     dataset = dataset.map(
         lambda filename, label: tf.py_function(
-            func=parse_function,
+            func=parse_function_classification,
             inp=[filename, label, data_dir, single_channel],
             Tout=(tf.float32, tf.float32),
         ),
@@ -93,7 +94,54 @@ def load_classification_data(data_dir, split_list_file, single_channel=False):
     return dataset
 
 
-def create_dataset(data_dir, split_list_file, batch_size, single_channel=False):
+def create_dataset_classification(data_dir, split_list_file, batch_size, single_channel=False):
     """Load the data and prepare it as a batched tf.data.Dataset."""
     dataset = load_classification_data(data_dir, split_list_file, single_channel)
+    return dataset.shuffle(500).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+
+
+
+# <------- Segmentation data loader functions ------->
+
+def parse_function_segmentation(image_path, mask_path):
+    """Load images and masks."""
+    # Load the image from file
+    image_path = image_path.numpy().decode("utf-8")
+    mask_path = mask_path.numpy().decode("utf-8")
+
+    image = np.load(image_path)
+    mask = np.load(mask_path)
+
+    return image, mask
+
+
+def load_segmentation_data(data_dir, split='train'):
+    """Create a tf.data.Dataset for the segmentation task."""
+    task_dir = os.path.join(data_dir, "segmentation")
+
+    assert split in ['train', 'val'], "Split should be train or val."
+    if split == 'train':
+        split_dir = os.path.join(task_dir, "train2017")
+    elif split == 'val':
+        split_dir = os.path.join(task_dir, "val2017")
+
+    # Create list of (filename, label) pairs
+    images = [os.path.join(split_dir, filename) for filename in os.listdir(split_dir) if 'image' in filename]
+    masks = [os.path.join(split_dir, filename) for filename in os.listdir(split_dir) if 'mask' in filename]
+
+    # Create a tf.data.Dataset from filenames and labels
+    dataset = tf.data.Dataset.from_tensor_slices((images, masks))
+    dataset = dataset.map(
+        lambda image, mask: tf.py_function(
+            func=parse_function_segmentation, inp=[image, mask], Tout=(tf.float32, tf.float32)
+        ),
+        num_parallel_calls=tf.data.AUTOTUNE,
+    )
+
+    return dataset
+
+
+def create_dataset_segmentation(data_dir, split, batch_size):
+    """Load the data and prepare it as a batched tf.data.Dataset."""
+    dataset = load_segmentation_data(data_dir, split)
     return dataset.shuffle(500).batch(batch_size).prefetch(tf.data.AUTOTUNE)

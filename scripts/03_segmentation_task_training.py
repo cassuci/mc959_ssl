@@ -1,44 +1,21 @@
-# scripts/03_baseline.py
 import os
 import sys
 import tensorflow as tf
-import numpy as np
-
 # Add the project root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from src.models.resnet import ResNet18, ResNet50, load_encoder_weights
-from src.libs.data_loading import create_dataset
+from src.models.resnet import ResNet18, load_encoder_weights
+from src.libs.data_loading import create_dataset_segmentation
 
-
-def weighted_binary_cross_entropy(weights: dict, from_logits: bool = False):
-    assert 0 in weights
-    assert 1 in weights
-
-    def weighted_cross_entropy_fn(y_true, y_pred):
-        tf_y_true = tf.cast(y_true, dtype=y_pred.dtype)
-        tf_y_pred = tf.cast(y_pred, dtype=y_pred.dtype)
-
-        weights_v = tf.where(tf.equal(tf_y_true, 1), weights[1], weights[0])
-        weights_v = tf.cast(weights_v, dtype=y_pred.dtype)
-        ce = tf.keras.backend.binary_crossentropy(tf_y_true, tf_y_pred, from_logits=from_logits)
-        loss = tf.keras.backend.mean(tf.multiply(ce, weights_v))
-        return loss
-
-    return weighted_cross_entropy_fn
-
+# TODO
+# - Change loss
+# - Add metrics
+# - Fix path to saved models
 
 def train_model(model, train_dataset, val_dataset, epochs=10, initial_epoch=0):
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-4),
-        loss=weighted_binary_cross_entropy(weights={0: 1.0, 1: 9.0}, from_logits=False),
-        # loss=tf.keras.losses.BinaryCrossentropy(from_logits=False, label_smoothing=0.1),
-        metrics=[
-            tf.keras.metrics.BinaryAccuracy(),
-            tf.keras.metrics.Precision(),
-            tf.keras.metrics.Recall(),
-            tf.keras.metrics.AUC(multi_label=True, name="auc_roc"),
-            tf.keras.metrics.AUC(curve="PR", name="average_precision"),
-        ],
+        loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),
+        metrics=[],
     )
 
     # Create callbacks for training
@@ -46,7 +23,7 @@ def train_model(model, train_dataset, val_dataset, epochs=10, initial_epoch=0):
         monitor="val_loss", min_delta=0, patience=5, verbose=1, mode="auto"
     )
     checkpoint = tf.keras.callbacks.ModelCheckpoint(
-        "models/finetune_resnet50_new_loss/model_epoch_{epoch:02d}_loss_{val_loss:.2f}.h5",
+        "models/segmentation_baseline_epoch_{epoch:02d}_loss_{val_loss:.2f}.h5",
         monitor="val_loss",
         verbose=1,
         save_best_only=True,
@@ -104,46 +81,37 @@ def train_two_phases(model, train_dataset, val_dataset, epochs=10):
 
 
 if __name__ == "__main__":
-    data_path = "/mnt/f/ssl_images/data"  # ssl_images/data  if you're Letriça
-    data_dir = os.path.join(data_path, "processed", "pascal_voc")
-    metadata_dir = os.path.join(data_path, "pascal_voc", "ImageSets", "Main")
-    pretrained_model = os.path.join("models", "checkpoints_resnet18_mae", "best_model.h5")  # None
-    two_phases_train = True  # set to True to freeze encoder in the first epoch
+    data_path = "ssl_images/data"  # ssl_images/data  if you're Letriça
+    data_dir = os.path.join(data_path, "processed", "coco")
+    pretrained_model = None
+    two_phases_train = False  # set to True to freeze encoder in the first epoch
 
-    model = ResNet50((224, 224, 1), mode="classification")
+    model = ResNet18((224, 224, 3), mode="segmentation")
     print(model.summary())
 
     if pretrained_model:
         print("Loading model weights...")
         load_encoder_weights(model, pretrained_model)
 
-    single_channel = model.input_shape[-1] == 1
-
     # Load data and create dataset
     print("Loading data and creating dataset...")
-    train_dataset = create_dataset(
-        data_dir,
-        split_list_file=os.path.join(metadata_dir, "train.txt"),
-        batch_size=32,
-        single_channel=single_channel,
+    train_dataset = create_dataset_segmentation(
+        data_dir, split='train', batch_size=32
     )
-    val_dataset = create_dataset(
-        data_dir,
-        split_list_file=os.path.join(metadata_dir, "val.txt"),
-        batch_size=32,
-        single_channel=single_channel,
+    val_dataset = create_dataset_segmentation(
+        data_dir, split='val', batch_size=32
     )
 
     # Train the model
     print("Training the model...")
     if two_phases_train:
-        fine_tuned_model, history = train_two_phases(model, train_dataset, val_dataset)
+        trained_model, history = train_two_phases(model, train_dataset, val_dataset)
     else:
-        fine_tuned_model, history = train_model(model, train_dataset, val_dataset)
+        trained_model, history = train_model(model, train_dataset, val_dataset)
 
     # Save the model
     os.makedirs("models", exist_ok=True)
-    save_path = os.path.join("models", "finetune_resnet50_new_loss.h5")
-    fine_tuned_model.save_weights(save_path)
+    save_path = os.path.join("models", "baseline_segmentation.h5")
+    trained_model.save_weights(save_path)
     print(f"Final model saved to {save_path}")
-    print("Supervised training completed successfully!")
+    print("Segmentation training completed successfully!")

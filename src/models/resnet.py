@@ -56,8 +56,8 @@ def upsample_block(x, skip_connection, filters, name_prefix):
 
 def ResNet(input_shape, block_sizes, name="ResNet", mode="classification"):
 
-    assert mode in ['classification', 'colorization', 'inpainting'], \
-           "Invalid mode. Choose either 'classification', 'colorization' or 'inpainting'."
+    assert mode in ['classification', 'segmentation', 'colorization', 'inpainting'], \
+           "Invalid mode. Choose either 'classification', 'segmentation', 'colorization' or 'inpainting'."
 
     inputs = tf.keras.Input(shape=input_shape)
 
@@ -84,6 +84,23 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification"):
         #x = tf.keras.layers.Dense(500, activation='relu', name='cls_1')(x)
         #x = tf.keras.layers.Dense(500, activation='relu', name='cls_2')(x)
         outputs = tf.keras.layers.Dense(20, activation='sigmoid', name="predictions")(x)
+
+    elif mode == 'segmentation':
+        # Decoder pathway with skip connections
+        skips = skip_connections[::-1]  # Reverse skip connections
+        decoder_filters = [256, 128, 64, 32, 16]
+
+        for i, filters in enumerate(decoder_filters):
+            skip = skips[i] if i < len(skips) else None
+            x = upsample_block(x, skip, filters, f"decoder_{i}")
+
+        # Final output layers
+        x = tf.keras.layers.Conv2D(8, 3, padding="same", name="pre_output_conv")(x)
+        x = tf.keras.layers.LeakyReLU(0.2)(x)
+        outputs = tf.keras.layers.Conv2D(10, 3, padding="same", activation="sigmoid", name="output_conv")(
+            x
+        ) # TODO try softmax if there's no intersection between classes
+
 
     elif mode == 'colorization':
         # Decoder pathway with skip connections
