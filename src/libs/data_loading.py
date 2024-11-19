@@ -130,10 +130,10 @@ def load_segmentation_data(data_dir, split="train", single_channel=False):
     """Create a tf.data.Dataset for the segmentation task."""
     task_dir = os.path.join(data_dir, "segmentation")
 
-    assert split in ["train", "val"], "Split should be train or val."
-    if split == "train":
+    assert split in ["train", "val", "test"], "Split should be train, val or test."
+    if split == "train" or split == "val":
         split_dir = os.path.join(task_dir, "train2017")
-    elif split == "val":
+    elif split == "test":
         split_dir = os.path.join(task_dir, "val2017")
 
     # Create list of (filename, label) pairs
@@ -141,6 +141,17 @@ def load_segmentation_data(data_dir, split="train", single_channel=False):
     images = [os.path.join(split_dir, filename) for filename in files]
     masks = [os.path.join(split_dir, filename.replace("image", "mask")) for filename in files]
 
+<<<<<<< Updated upstream
+=======
+    split_idx = int(0.8*len(images))
+    if split == "train":
+        images = images[:split_idx]
+        masks = masks[:split_idx]
+    elif split == "val":
+        images = images[split_idx:]
+        masks = masks[split_idx:]
+
+>>>>>>> Stashed changes
     # Create a tf.data.Dataset from filenames and labels
     dataset = tf.data.Dataset.from_tensor_slices((images, masks))
     dataset = dataset.map(
