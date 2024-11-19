@@ -137,16 +137,9 @@ def load_segmentation_data(data_dir, split="train", single_channel=False):
         split_dir = os.path.join(task_dir, "val2017")
 
     # Create list of (filename, label) pairs
-    images = [
-        os.path.join(split_dir, filename)
-        for filename in os.listdir(split_dir)
-        if "image" in filename
-    ]
-    masks = [
-        os.path.join(split_dir, filename.replace("image", "mask"))
-        for filename in os.listdir(split_dir)
-        if "image" in filename  # we read in the same order as images to create pairs of x, y
-    ]
+    files = [filename for filename in os.listdir(split_dir) if "image" in filename]
+    images = [os.path.join(split_dir, filename) for filename in files]
+    masks = [os.path.join(split_dir, filename.replace("image", "mask")) for filename in files]
 
     # if split == "train":
     #    images = images[:10000]

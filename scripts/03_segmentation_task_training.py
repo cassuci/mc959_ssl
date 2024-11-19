@@ -1,5 +1,6 @@
 import os
 import sys
+import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
 
@@ -7,11 +8,6 @@ import tensorflow.keras.backend as K
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.models.resnet import ResNet18, load_encoder_weights
 from src.libs.data_loading import create_dataset_segmentation
-
-# TODO
-# - Change loss
-# - Add metrics
-# - Fix path to saved models
 
 
 def iou_metric(
@@ -35,7 +31,108 @@ def iou_metric(
     return sum(class_iou) / len(class_iou)
 
 
-def train_model(model, train_dataset, val_dataset, epochs=10, initial_epoch=0):
+class TrainingProgressCallback(tf.keras.callbacks.Callback):
+    """Custom callback to track and save training progress."""
+
+    def __init__(self, checkpoint_dir="models", save_freq=1):
+        super().__init__()
+        self.checkpoint_dir = checkpoint_dir
+        self.save_freq = save_freq
+        self.best_val_loss = float("inf")
+        os.makedirs(checkpoint_dir, exist_ok=True)
+
+        # Load existing history if it exists
+        history_path = os.path.join(checkpoint_dir, "training_history.npy")
+        if os.path.exists(history_path):
+            try:
+                self.history = np.load(history_path, allow_pickle=True).item()
+            except:
+                self.history = self._initialize_history()
+        else:
+            self.history = self._initialize_history()
+
+        # Load best validation loss if it exists
+        best_loss_path = os.path.join(checkpoint_dir, "best_val_loss.npy")
+        if os.path.exists(best_loss_path):
+            self.best_val_loss = float(np.load(best_loss_path))
+
+    def _initialize_history(self):
+        return {
+            "loss": [],
+            "val_loss": [],
+            "iou_metric": [],
+            "val_iou_metric": [],
+        }
+
+    def on_epoch_end(self, epoch, logs=None):
+        # Update history
+        for metric in self.history.keys():
+            if metric in logs:
+                self.history[metric].append(logs[metric])
+
+        # Save periodic checkpoint
+        if (epoch + 1) % self.save_freq == 0:
+            checkpoint_path = os.path.join(
+                self.checkpoint_dir, f"segmentation_model_epoch_{epoch + 1:03d}.h5"
+            )
+            self.model.save_weights(checkpoint_path)
+            print(f"\nSaved periodic checkpoint for epoch {epoch + 1}")
+
+        # Save best model
+        if logs.get("val_loss", float("inf")) < self.best_val_loss:
+            self.best_val_loss = logs["val_loss"]
+            best_model_path = os.path.join(self.checkpoint_dir, "best_segmentation_model.h5")
+            self.model.save_weights(best_model_path)
+            # Save best validation loss
+            np.save(os.path.join(self.checkpoint_dir, "best_val_loss.npy"), self.best_val_loss)
+            print(f"\nNew best model saved with validation loss: {self.best_val_loss:.6f}")
+
+        # Save training history
+        history_path = os.path.join(self.checkpoint_dir, "training_history.npy")
+        np.save(history_path, self.history)
+
+
+def get_latest_checkpoint(checkpoint_dir):
+    """Find the latest checkpoint file and extract its epoch number."""
+    if not os.path.exists(checkpoint_dir):
+        return None, 0
+
+    # Look for epoch checkpoints
+    import glob
+    import re
+
+    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "segmentation_model_epoch_*.h5"))
+
+    if not checkpoint_files:
+        return None, 0
+
+    # Extract epoch numbers and find the latest one
+    epoch_numbers = []
+    for f in checkpoint_files:
+        match = re.search(r"segmentation_model_epoch_(\d+)\.h5", f)
+        if match:
+            epoch_numbers.append((int(match.group(1)), f))
+
+    if not epoch_numbers:
+        return None, 0
+
+    # Get the latest epoch checkpoint
+    latest_epoch, latest_file = max(epoch_numbers, key=lambda x: x[0])
+
+    return latest_file, latest_epoch
+
+
+def train_model(
+    model, train_dataset, val_dataset, epochs=10, initial_epoch=0, checkpoint_dir="models"
+):
+    # Get latest checkpoint if exists
+    latest_checkpoint, loaded_initial_epoch = get_latest_checkpoint(checkpoint_dir)
+
+    if latest_checkpoint:
+        print(f"Found checkpoint at epoch {loaded_initial_epoch}, resuming training...")
+        model.load_weights(latest_checkpoint)
+        initial_epoch = loaded_initial_epoch
+
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-4),
         loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),
@@ -43,20 +140,15 @@ def train_model(model, train_dataset, val_dataset, epochs=10, initial_epoch=0):
     )
 
     # Create callbacks for training
-    early_stopping = tf.keras.callbacks.EarlyStopping(
-        monitor="val_loss", min_delta=0, patience=5, verbose=1, mode="auto"
-    )
-    checkpoint = tf.keras.callbacks.ModelCheckpoint(
-        "models/segmentation_baseline_epoch_{epoch:02d}_loss_{val_loss:.2f}.h5",
-        monitor="val_loss",
-        verbose=1,
-        save_best_only=True,
-        save_weights_only=True,
-        mode="auto",
-    )
-    reduceLRcallback = tf.keras.callbacks.ReduceLROnPlateau(
-        monitor="val_loss", factor=0.5, patience=3, verbose=1, mode="auto"
-    )
+    callbacks = [
+        TrainingProgressCallback(checkpoint_dir=checkpoint_dir, save_freq=1),
+        tf.keras.callbacks.EarlyStopping(
+            monitor="val_loss", min_delta=0, patience=5, verbose=1, mode="auto"
+        ),
+        tf.keras.callbacks.ReduceLROnPlateau(
+            monitor="val_loss", factor=0.5, patience=3, verbose=1, mode="auto"
+        ),
+    ]
 
     # Train the model
     history = model.fit(
@@ -65,13 +157,13 @@ def train_model(model, train_dataset, val_dataset, epochs=10, initial_epoch=0):
         initial_epoch=initial_epoch,
         epochs=epochs,
         verbose=1,
-        callbacks=[early_stopping, checkpoint, reduceLRcallback],
+        callbacks=callbacks,
     )
 
     return model, history
 
 
-def train_two_phases(model, train_dataset, val_dataset, epochs=10):
+def train_two_phases(model, train_dataset, val_dataset, epochs=10, checkpoint_dir="models"):
     """Train the model on the classification task with two phases."""
 
     # Phase 1: Train with frozen encoder for 1 epoch
@@ -81,7 +173,9 @@ def train_two_phases(model, train_dataset, val_dataset, epochs=10):
         if not isinstance(layer, tf.keras.layers.Dense):
             layer.trainable = False
 
-    model, history1 = train_model(model, train_dataset, val_dataset, epochs=1, initial_epoch=0)
+    model, history1 = train_model(
+        model, train_dataset, val_dataset, epochs=1, initial_epoch=0, checkpoint_dir=checkpoint_dir
+    )
 
     # Phase 2: Train with unfrozen encoder for remaining epochs
     print("\nPhase 2: Training with unfrozen encoder...")
@@ -90,7 +184,12 @@ def train_two_phases(model, train_dataset, val_dataset, epochs=10):
         layer.trainable = True
 
     model, history2 = train_model(
-        model, train_dataset, val_dataset, epochs=epochs, initial_epoch=1
+        model,
+        train_dataset,
+        val_dataset,
+        epochs=epochs,
+        initial_epoch=1,
+        checkpoint_dir=checkpoint_dir,
     )
 
     # Combine histories
@@ -105,16 +204,26 @@ def train_two_phases(model, train_dataset, val_dataset, epochs=10):
 
 
 if __name__ == "__main__":
+    # Set random seeds for reproducibility
+    tf.random.set_seed(42)
+    np.random.seed(42)
+
     data_path = os.path.join("/mnt/f/ssl_images/data/")
     data_dir = os.path.join(data_path, "processed", "coco")
-    pretrained_model = os.path.join("models", "checkpoints_resnet18_vgg", "best_model.h5")
-    # pretrained_model = False
-    two_phases_train = True  # set to True to freeze encoder in the first epoch
+    checkpoint_dir = os.path.join("models", "segmentation_checkpoints_resnet18_mae")
+    pretrained_model = os.path.join("models", "checkpoints_resnet18_mae", "best_model.h5")
+
+    # Configuration flags
+    use_pretrained_weights = True  # Set to True to load pretrained encoder weights
+    two_phases_train = True  # Set to True to freeze encoder in the first epoch
+
+    # Create checkpoint directory if not exists
+    os.makedirs(checkpoint_dir, exist_ok=True)
 
     model = ResNet18((224, 224, 1), mode="segmentation")
     print(model.summary())
 
-    if pretrained_model:
+    if use_pretrained_weights and pretrained_model:
         print("Loading model weights...")
         load_encoder_weights(model, pretrained_model)
 
@@ -138,13 +247,16 @@ if __name__ == "__main__":
     # Train the model
     print("Training the model...")
     if two_phases_train:
-        trained_model, history = train_two_phases(model, train_dataset, val_dataset)
+        trained_model, history = train_two_phases(
+            model, train_dataset, val_dataset, checkpoint_dir=checkpoint_dir
+        )
     else:
-        trained_model, history = train_model(model, train_dataset, val_dataset)
+        trained_model, history = train_model(
+            model, train_dataset, val_dataset, checkpoint_dir=checkpoint_dir
+        )
 
-    # Save the model
-    os.makedirs("models", exist_ok=True)
-    save_path = os.path.join("models", "no_weights_finetune_segmentation_resnet18.h5")
+    # Save the final model
+    save_path = os.path.join(checkpoint_dir, "final_segmentation_model.h5")
     trained_model.save_weights(save_path)
     print(f"Final model saved to {save_path}")
     print("Segmentation training completed successfully!")
