@@ -97,9 +97,9 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification"):
         # Final output layers
         x = tf.keras.layers.Conv2D(8, 3, padding="same", name="pre_output_conv_seg")(x)
         x = tf.keras.layers.LeakyReLU(0.2)(x)
-        outputs = tf.keras.layers.Conv2D(10, 3, padding="same", activation="sigmoid", name="output_conv_seg")(
+        outputs = tf.keras.layers.Conv2D(10, 3, padding="same", activation="softmax", name="output_conv_seg")(
             x
-        ) # TODO try softmax if there's no intersection between classes
+        )
 
 
     elif mode == 'colorization':
@@ -117,9 +117,6 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification"):
         outputs = tf.keras.layers.Conv2D(2, 3, padding="same", activation="sigmoid", name="output_conv")(
             x
         )
-
-        # Scale tanh output to [0, 1] range
-        outputs = (outputs + 1) / 2
 
     # TODO Inpainting decoder (not sure if it's the same as colorization, maybe output shape is different?)
     elif mode == 'inpainting':
