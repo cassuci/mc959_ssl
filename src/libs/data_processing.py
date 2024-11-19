@@ -5,14 +5,26 @@ import json
 import pycocotools.mask as mask_util
 
 
+import numpy as np
+import cv2  # OpenCV for resizing
+
+
 def load_image(image_path):
     """Load an image from a file path."""
     return Image.open(image_path)
 
 
 def resize_image(image, size=(224, 224)):
-    """Resize an image to a given size."""
-    return np.resize(image, size)
+    """Resize an image to a given size while keeping the number of channels (arbitrary channels)."""
+
+    # Check if the image has more than 1 channel
+    if image.ndim == 3:  # Multi-channel image (e.g., RGB, arbitrary channels)
+        # Resize the image with cv2.resize to match the new size
+        resized_image = cv2.resize(image, size, interpolation=cv2.INTER_LINEAR)
+    else:  # Single-channel image (grayscale)
+        resized_image = cv2.resize(image, size, interpolation=cv2.INTER_LINEAR)
+
+    return resized_image
 
 
 def normalize_image(image):

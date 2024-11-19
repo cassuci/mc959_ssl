@@ -78,7 +78,7 @@ def save_segmentation_arrays(coco, data_dir, output_dir_segmentation, img_id, ca
             binary_masks[:, :, class_idx] = np.maximum(binary_masks[:, :, class_idx], mask)
 
     # Compute the background mask as the "negative" of the sum of all other masks
-    background_mask = np.ones((height, width), dtype=np.uint8)
+    background_mask = np.ones((height, width), dtype=np.float16)
     background_mask = np.maximum(background_mask - np.sum(binary_masks, axis=-1), 0)
 
     # Add the background mask as the last channel
@@ -87,7 +87,7 @@ def save_segmentation_arrays(coco, data_dir, output_dir_segmentation, img_id, ca
     )
 
     img = resize_normalize(img)
-    input_gray_image = np.expand_dims(np.dot(img[..., :3], [0.2989, 0.5870, 0.1140]), axis=-1)
+    input_gray_image = np.dot(img[..., :3], [0.2989, 0.5870, 0.1140])
     binary_masks = resize_image(binary_masks)
 
     np.save(os.path.join(output_dir_segmentation, f"image_{img_id}.npy"), img)
@@ -145,6 +145,6 @@ if __name__ == "__main__":
 
     # prepare_coco_data_colorization(coco_dir, output_dir)
     prepare_coco_data_segmentation(coco_dir, output_dir, "train", num_samples=10000)
-    prepare_coco_data_segmentation(coco_dir, output_dir, "val", num_samples=20000)
+    prepare_coco_data_segmentation(coco_dir, output_dir, "val", num_samples=2000)
 
     print("Data preparation completed successfully!")

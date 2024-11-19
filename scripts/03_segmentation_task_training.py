@@ -38,7 +38,7 @@ def iou_metric(
 def train_model(model, train_dataset, val_dataset, epochs=10, initial_epoch=0):
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-4),
-        loss=tf.keras.losses.BinaryCrossentropy(from_logits=False),
+        loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),
         metrics=[iou_metric],
     )
 
