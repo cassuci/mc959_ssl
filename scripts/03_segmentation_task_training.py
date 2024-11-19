@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import re
+import argparse
 
 # Add the project root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -271,31 +272,36 @@ def train_two_phases(model, train_dataset, val_dataset, epochs=10, checkpoint_di
     return model, combined_history
 
 
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_path", default="/mnt/f/ssl_images/data", type=str, help="Dataset folder path")
+    parser.add_argument("--two_phases_train", action='store_true', help="Allow training in two phases")
+    parser.add_argument("--pretrained_model", default=None, type=str, help="Path to pretrained model")
+    parser.add_argument("--single_channel", action='store_true', help="To use grayscale images")
+    parser.add_argument("--checkpoint_dir", default='segmentation_ckpt', type=str, help="Prefix to the saved model path")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
     # Set random seeds for reproducibility
     tf.random.set_seed(42)
     np.random.seed(42)
 
-    data_path = os.path.join("/mnt/f/ssl_images/data/")
-    data_dir = os.path.join(data_path, "processed", "coco")
-    checkpoint_dir = os.path.join("models", "segmentation_checkpoints_resnet18_mae")
-    pretrained_model = os.path.join("models", "checkpoints_resnet18_mae", "best_model.h5")
-
-    # Configuration flags
-    use_pretrained_weights = True  # Set to True to load pretrained encoder weights
-    two_phases_train = True  # Set to True to freeze encoder in the first epoch
+    args = get_args()
+    data_dir = os.path.join(args.data_path, "processed", "coco")
 
     # Create checkpoint directory if not exists
-    os.makedirs(checkpoint_dir, exist_ok=True)
+    os.makedirs(args.checkpoint_dir, exist_ok=True)
 
-    model = ResNet18((224, 224, 1), mode="segmentation")
+    if args.single_channel:
+        model = ResNet18((224, 224, 1), mode="segmentation")
+    else:
+        model = ResNet18((224, 224, 3), mode="segmentation")
     print(model.summary())
 
-    if use_pretrained_weights and pretrained_model:
+    if args.pretrained_model:
         print("Loading model weights...")
-        load_encoder_weights(model, pretrained_model)
-
-    single_channel = model.input_shape[-1] == 1
+        load_encoder_weights(model, args.pretrained_model)
 
     # Load data and create dataset
     print("Loading data and creating dataset...")
@@ -303,38 +309,38 @@ if __name__ == "__main__":
         data_dir,
         split="train",
         batch_size=32,
-        single_channel=single_channel,
+        single_channel=args.single_channel,
     )
     val_dataset = create_dataset_segmentation(
         data_dir,
         split="val",
         batch_size=32,
-        single_channel=single_channel,
+        single_channel=args.single_channel,
     )
 
     # Train the model
     print("Training the model...")
-    if two_phases_train:
+    if args.two_phases_train:
         trained_model, history = train_two_phases(
             model,
             train_dataset,
             val_dataset,
-            checkpoint_dir=checkpoint_dir,
+            checkpoint_dir=args.checkpoint_dir,
             epochs=10,  # Specify total epochs for two-phase training
         )
     else:
         trained_model, history = train_model(
-            model, train_dataset, val_dataset, checkpoint_dir=checkpoint_dir
+            model, train_dataset, val_dataset, checkpoint_dir=args.checkpoint_dir
         )
 
     # Save the final model in both formats
     # TensorFlow Checkpoint
-    final_tf_checkpoint_path = os.path.join(checkpoint_dir, "final_model")
+    final_tf_checkpoint_path = os.path.join(args.checkpoint_dir, "final_model")
     checkpoint = tf.train.Checkpoint(model=trained_model)
     checkpoint.save(final_tf_checkpoint_path)
 
     # H5 Weights
-    final_h5_path = os.path.join(checkpoint_dir, "final_segmentation_model.h5")
+    final_h5_path = os.path.join(args.checkpoint_dir, "final_segmentation_model.h5")
     trained_model.save_weights(final_h5_path)
 
     print(f"Final model saved as TF checkpoint to {final_tf_checkpoint_path}")
