@@ -86,15 +86,15 @@ def save_segmentation_arrays(coco, data_dir, output_dir_segmentation, img_id, ca
         (binary_masks, np.expand_dims(background_mask, axis=-1)), axis=-1
     )
 
-    gray_image = np.dot(img[..., :3], [0.2989, 0.5870, 0.1140])
-    input_gray_image = np.expand_dims(gray_image, axis=-1)
-
     img = resize_normalize(img)
-    input_gray_image = resize_normalize(input_gray_image)
+    input_gray_image = np.expand_dims(np.dot(img[..., :3], [0.2989, 0.5870, 0.1140]), axis=-1)
     binary_masks = resize_image(binary_masks)
 
     np.save(os.path.join(output_dir_segmentation, f"image_{img_id}.npy"), img)
-    np.save(os.path.join(output_dir_segmentation, f"inputgray_{img_id}.npy"), input_gray_image)
+    np.save(
+        os.path.join(output_dir_segmentation, f"inputgray_{img_id}.npy"),
+        input_gray_image,
+    )
     np.save(os.path.join(output_dir_segmentation, f"mask_{img_id}.npy"), binary_masks)
 
 

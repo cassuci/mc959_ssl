@@ -12,7 +12,7 @@ def load_image(image_path):
 
 def resize_image(image, size=(224, 224)):
     """Resize an image to a given size."""
-    return image.resize(size)
+    return np.resize(image, size)
 
 
 def normalize_image(image):
