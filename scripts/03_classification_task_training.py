@@ -2,7 +2,7 @@
 import os
 import sys
 import tensorflow as tf
-import numpy as np
+import argparse
 
 # Add the project root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -103,21 +103,29 @@ def train_two_phases(model, train_dataset, val_dataset, epochs=10):
     return model, combined_history
 
 
-if __name__ == "__main__":
-    data_path = "/mnt/f/ssl_images/data"  # ssl_images/data  if you're Letriça
-    data_dir = os.path.join(data_path, "processed", "pascal_voc")
-    metadata_dir = os.path.join(data_path, "pascal_voc", "ImageSets", "Main")
-    pretrained_model = os.path.join("models", "checkpoints_resnet18_mae", "best_model.h5")  # None
-    two_phases_train = True  # set to True to freeze encoder in the first epoch
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_path", default="/mnt/f/ssl_images/data", type=str, help="Dataset folder path")
+    parser.add_argument("--two_phases_train", action='store_true', help="Allow training in two phases")
+    parser.add_argument("--pretrained_model", default=None, type=str, help="Path to pretrained model")
+    parser.add_argument("--single_channel", action='store_true', help="To use grayscale images")
+    parser.add_argument("--checkpoint_dir", default='classification_ckpt', type=str, help="Prefix to the saved model path")
+    return parser.parse_args()
 
-    model = ResNet50((224, 224, 1), mode="classification")
+if __name__ == "__main__":
+    args = get_args()
+    data_dir = os.path.join(args.data_path, "processed", "pascal_voc")
+    metadata_dir = os.path.join(args.data_path, "pascal_voc", "ImageSets", "Main")
+
+    if args.single_channel:
+        model = ResNet18((224, 224, 1), mode="classification")
+    else:
+        model = ResNet18((224, 224, 3), mode="classification")
     print(model.summary())
 
-    if pretrained_model:
+    if args.pretrained_model:
         print("Loading model weights...")
-        load_encoder_weights(model, pretrained_model)
-
-    single_channel = model.input_shape[-1] == 1
+        load_encoder_weights(model, args.pretrained_model)
 
     # Load data and create dataset
     print("Loading data and creating dataset...")
@@ -125,25 +133,25 @@ if __name__ == "__main__":
         data_dir,
         split_list_file=os.path.join(metadata_dir, "train.txt"),
         batch_size=32,
-        single_channel=single_channel,
+        single_channel=args.single_channel,
     )
     val_dataset = create_dataset_classification(
         data_dir,
         split_list_file=os.path.join(metadata_dir, "val.txt"),
         batch_size=32,
-        single_channel=single_channel,
+        single_channel=args.single_channel,
     )
 
     # Train the model
     print("Training the model...")
-    if two_phases_train:
+    if args.two_phases_train:
         fine_tuned_model, history = train_two_phases(model, train_dataset, val_dataset)
     else:
         fine_tuned_model, history = train_model(model, train_dataset, val_dataset)
 
     # Save the model
     os.makedirs("models", exist_ok=True)
-    save_path = os.path.join("models", "finetune_resnet50_new_loss.h5")
+    save_path = os.path.join("models", f"{args.checkpoint_dir}.h5")
     fine_tuned_model.save_weights(save_path)
     print(f"Final model saved to {save_path}")
     print("Supervised training completed successfully!")
