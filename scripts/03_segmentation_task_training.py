@@ -17,23 +17,34 @@ from src.libs.data_loading import create_dataset_segmentation
 
 def iou_metric(
     y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 10, threshold: float = 0.5
-):
-    class_iou = []
+) -> tf.Tensor:
+    # Binarize predictions
+    y_pred_bin = tf.cast(y_pred > threshold, tf.float32)
+
+    # Initialize list to store IoU for each class
+    ious = []
+
     for class_idx in range(num_classes):
-        # Generate binary vector from predictions
-        y_pred = tf.where(y_pred > threshold, 1.0, 0.0)
+        # Extract predictions and ground truth for the current class
+        y_true_class = y_true[..., class_idx]
+        y_pred_class = y_pred_bin[..., class_idx]
 
-        # Extract single class to compute IoU over
-        y_true_single_class = y_true[..., class_idx]
-        y_pred_single_class = y_pred[..., class_idx]
+        # Compute intersection and union
+        intersection = tf.reduce_sum(y_true_class * y_pred_class, axis=(1, 2))  # Sum over spatial dimensions
+        union = (
+            tf.reduce_sum(y_true_class, axis=(1, 2))
+            + tf.reduce_sum(y_pred_class, axis=(1, 2))
+            - intersection
+        )
 
-        # Compute IoU
-        intersection = K.sum(y_true_single_class * y_pred_single_class)
-        union = K.sum(y_true_single_class) + K.sum(y_pred_single_class) - intersection
+        # Avoid division by zero by using a conditional operation
+        iou = tf.where(union > 0, intersection / union, tf.ones_like(union))
+        ious.append(iou)
 
-        class_iou.append(K.switch(K.equal(union, 0.0), 1.0, intersection / union))
+    # Compute mean IoU over all classes
+    mean_iou = tf.reduce_mean(tf.stack(ious, axis=0), axis=0)  # Average over classes
 
-    return sum(class_iou) / len(class_iou)
+    return tf.reduce_mean(mean_iou)  # Average over batch
 
 
 class TrainingProgressCallback(tf.keras.callbacks.Callback):
@@ -97,153 +108,6 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
         np.save(history_path, self.history)
 
 
-def _gather_channels(x, indexes, **kwargs):
-    """Slice tensor along channels axis by given indexes"""
-    if tf.keras.backend.image_data_format() == 'channels_last':
-        x = tf.keras.permute_dimensions(x, (3, 0, 1, 2))
-        x = tf.keras.gather(x, indexes)
-        x = tf.keras.permute_dimensions(x, (1, 2, 3, 0))
-    else:
-        x = tf.keras.permute_dimensions(x, (1, 0, 2, 3))
-        x = tf.keras.gather(x, indexes)
-        x = tf.keras.permute_dimensions(x, (1, 0, 2, 3))
-    return x
-
-def gather_channels(*xs, indexes=None, **kwargs):
-    """Slice tensors along channels axis by given indexes"""
-    if indexes is None:
-        return xs
-    elif isinstance(indexes, (int)):
-        indexes = [indexes]
-    xs = [_gather_channels(x, indexes=indexes, **kwargs) for x in xs]
-    return xs
-
-
-def round_if_needed(x, threshold, **kwargs):
-    if threshold is not None:
-        x = tf.keras.greater(x, threshold)
-        x = tf.keras.cast(x, tf.keras.floatx())
-    return x
-
-
-def average(x, per_image=False, class_weights=None, **kwargs):
-    if per_image:
-        x = tf.math.reduce_mean(x, axis=0)
-    if class_weights is not None:
-        x = x * class_weights
-    return tf.math.reduce_mean(x)
-
-
-def get_reduce_axes(per_image, **kwargs):
-    axes = [1, 2] if tf.keras.backend.image_data_format() == 'channels_last' else [2, 3]
-    if not per_image:
-        axes.insert(0, 0)
-    return axes
-
-
-def iou_score(gt, pr, class_weights=1., class_indexes=None, smooth=1e-5, per_image=False, threshold=None, **kwargs):
-
-    gt, pr = gather_channels(gt, pr, indexes=class_indexes, **kwargs)
-    #pr = round_if_needed(pr, threshold, **kwargs)
-    class_indices = tf.argmax(pr, axis=-1)
-    pr = tf.one_hot(class_indices, depth=11)
-    pr = tf.cast(pr, dtype=gt.dtype)
-
-    axes = get_reduce_axes(per_image, **kwargs)
-
-    # score calculation
-    intersection = tf.math.reduce_sum(gt * pr, axis=axes)
-    union = tf.math.reduce_sum(gt + pr, axis=axes) - intersection
-
-    score = (intersection + smooth) / (union + smooth)
-    score = average(score, per_image, class_weights, **kwargs)
-
-    return score
-
-
-class IOUScore:
-
-    def __init__(
-            self,
-            class_weights=None,
-            class_indexes=None,
-            threshold=None,
-            per_image=False,
-            smooth=1e-5,
-            name=None,
-    ):
-        name = name or 'iou_score'
-        self.class_weights = class_weights if class_weights is not None else 1
-        self.class_indexes = class_indexes
-        self.threshold = threshold
-        self.per_image = per_image
-        self.smooth = smooth
-
-    def __call__(self, gt, pr):
-        return iou_score(
-            gt,
-            pr,
-            class_weights=self.class_weights,
-            class_indexes=self.class_indexes,
-            smooth=self.smooth,
-            per_image=self.per_image,
-            threshold=self.threshold
-        )
-
-class FScore:
-
-    def __init__(
-            self,
-            beta=1,
-            class_weights=None,
-            class_indexes=None,
-            threshold=None,
-            per_image=False,
-            smooth=1e-5,
-            name=None,
-    ):
-        name = name or 'f{}-score'.format(beta)
-        self.beta = beta
-        self.class_weights = class_weights if class_weights is not None else 1
-        self.class_indexes = class_indexes
-        self.threshold = threshold
-        self.per_image = per_image
-        self.smooth = smooth
-
-    def __call__(self, gt, pr):
-        return f_score(
-            gt,
-            pr,
-            beta=self.beta,
-            class_weights=self.class_weights,
-            class_indexes=self.class_indexes,
-            smooth=self.smooth,
-            per_image=self.per_image,
-            threshold=self.threshold,
-        )
-
-def f_score(gt, pr, beta=1, class_weights=1, class_indexes=None, smooth=1e-5, per_image=False, threshold=None,
-            **kwargs):
-
-
-    gt, pr = gather_channels(gt, pr, indexes=class_indexes, **kwargs)
-    class_indices = tf.argmax(pr, axis=-1)
-    pr = tf.one_hot(class_indices, depth=11)
-    pr = tf.cast(pr, dtype=gt.dtype)
-    axes = get_reduce_axes(per_image, **kwargs)
-
-    # calculate score
-    tp = tf.math.reduce_sum(gt * pr, axis=axes)
-    fp = tf.math.reduce_sum(pr, axis=axes) - tp
-    fn = tf.math.reduce_sum(gt, axis=axes) - tp
-
-    score = ((1 + beta ** 2) * tp + smooth) \
-            / ((1 + beta ** 2) * tp + beta ** 2 * fn + fp + smooth)
-    score = average(score, per_image, class_weights, **kwargs)
-
-    return score
-
-
 
 def train_model(
     model,
@@ -291,14 +155,12 @@ def train_model(
     focal_loss = sm.losses.CategoricalFocalLoss()
     total_loss = dice_loss + (1 * focal_loss)
 
-    metrics = [IOUScore(), FScore()]
-
     # Compile the model
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-4),
         loss=total_loss,
         #loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),
-        metrics=metrics,
+        metrics=[iou_metric],
     )
 
     # Create callbacks for training
