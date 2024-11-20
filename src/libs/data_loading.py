@@ -116,12 +116,10 @@ def parse_function_segmentation(image_path, mask_path, single_channel):
     if single_channel:
         # Average the three channels
         # image_mean = np.mean(image, axis=-1)  # Average across the last dimension (channels)
-        image_mean = np.dot(image[..., :3], [0.2989, 0.5870, 0.1140])
+        # image_mean = np.dot(image[..., :3], [0.2989, 0.5870, 0.1140])
 
         # Expand dimensions to make it (height, width, 1)
-        image_mean = np.expand_dims(image_mean, axis=-1)  # Add a new axis for the single channel
-
-        return image_mean, mask
+        image = np.expand_dims(image, axis=-1)  # Add a new axis for the single channel
 
     return image, mask
 
@@ -137,11 +135,16 @@ def load_segmentation_data(data_dir, split="train", single_channel=False):
         split_dir = os.path.join(task_dir, "val2017")
 
     # Create list of (filename, label) pairs
-    files = [filename for filename in os.listdir(split_dir) if "image" in filename]
+    file_search_substr = "image"
+    if single_channel:
+        file_search_substr = "inputgray"
+    files = [filename for filename in os.listdir(split_dir) if file_search_substr in filename]
     images = [os.path.join(split_dir, filename) for filename in files]
-    masks = [os.path.join(split_dir, filename.replace("image", "mask")) for filename in files]
+    masks = [
+        os.path.join(split_dir, filename.replace(file_search_substr, "mask")) for filename in files
+    ]
 
-    split_idx = int(0.8*len(images))
+    split_idx = int(0.8 * len(images))
     if split == "train":
         images = images[:split_idx]
         masks = masks[:split_idx]
