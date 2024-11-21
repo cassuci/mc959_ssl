@@ -105,22 +105,34 @@ def create_dataset_classification(data_dir, split_list_file, batch_size, single_
 
 
 def parse_function_segmentation(image_path, mask_path, single_channel):
-    """Load images and masks."""
+    """Load images and masks with explicit type casting and shape checking."""
     # Load the image from file
     image_path = image_path.numpy().decode("utf-8")
     mask_path = mask_path.numpy().decode("utf-8")
 
-    image = np.load(image_path)
-    mask = np.load(mask_path)
-
+    image = np.load(image_path).astype(np.float32)
+    mask = np.load(mask_path).astype(np.float32)
+    
+    # Normalize image to [0,1] range if not already
+    if image.max() > 1.0:
+        image = image / 255.0
+    
+    # Ensure mask is one-hot encoded
+    if len(mask.shape) == 2:  # If mask is (H,W) format
+        # Convert to one-hot, assuming 4 classes (0,1,2,3)
+        mask = tf.one_hot(mask.astype(np.int32), depth=4)
+    
     if single_channel:
-        # Average the three channels
-        # image_mean = np.mean(image, axis=-1)  # Average across the last dimension (channels)
-        # image_mean = np.dot(image[..., :3], [0.2989, 0.5870, 0.1140])
+        # Convert RGB to grayscale using proper weights
+        image = np.dot(image[..., :3], [0.2989, 0.5870, 0.1140])
+        image = np.expand_dims(image, axis=-1)
 
-        # Expand dimensions to make it (height, width, 1)
-        image = np.expand_dims(image, axis=-1)  # Add a new axis for the single channel
-
+    # Ensure proper shapes
+    if len(image.shape) != 3:
+        raise ValueError(f"Image shape should be (H,W,C), got {image.shape}")
+    if len(mask.shape) != 3:
+        raise ValueError(f"Mask shape should be (H,W,C), got {mask.shape}")
+        
     return image, mask
 
 
@@ -168,6 +180,23 @@ def load_segmentation_data(data_dir, split="train", single_channel=False):
 
 
 def create_dataset_segmentation(data_dir, split, batch_size, single_channel=False):
-    """Load the data and prepare it as a batched tf.data.Dataset."""
+    """Load the data and prepare it as a batched tf.data.Dataset with explicit shapes."""
     dataset = load_segmentation_data(data_dir, split, single_channel)
+    
+    # Define output shapes and types
+    if single_channel:
+        output_shapes = ((None, None, 1), (None, None, 4))  # (H,W,1) for image, (H,W,4) for mask
+    else:
+        output_shapes = ((None, None, 3), (None, None, 4))  # (H,W,3) for image, (H,W,4) for mask
+    
+    output_types = (tf.float32, tf.float32)
+    
+    # Set shapes and types
+    dataset = dataset.map(
+        lambda x, y: (
+            tf.ensure_shape(x, output_shapes[0]),
+            tf.ensure_shape(y, output_shapes[1])
+        )
+    )
+    
     return dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)

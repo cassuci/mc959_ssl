@@ -89,7 +89,7 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
         # Save periodic checkpoint
         if (epoch + 1) % self.save_freq == 0:
             checkpoint_path = os.path.join(
-                self.checkpoint_dir, f"segmentation_model_epoch_{epoch + 1:03d}.h5"
+                self.checkpoint_dir, f"segmentation_model_epoch_{epoch + 1:03d}.weights.h5"
             )
             self.model.save_weights(checkpoint_path)
             print(f"\nSaved periodic checkpoint for epoch {epoch + 1}")
@@ -97,7 +97,7 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
         # Save best model
         if logs.get("val_loss", float("inf")) < self.best_val_loss:
             self.best_val_loss = logs["val_loss"]
-            best_model_path = os.path.join(self.checkpoint_dir, "best_segmentation_model.h5")
+            best_model_path = os.path.join(self.checkpoint_dir, "best_segmentation_model.weights.h5")
             self.model.save_weights(best_model_path)
             # Save best validation loss
             np.save(os.path.join(self.checkpoint_dir, "best_val_loss.npy"), self.best_val_loss)
@@ -116,7 +116,7 @@ def train_model(
     epochs=10,
     initial_epoch=0,
     checkpoint_dir="models",
-    load_latest_checkpoint=True,
+    load_latest_checkpoint=False,
 ):
     # Ensure checkpoint directory exists
     os.makedirs(checkpoint_dir, exist_ok=True)
@@ -174,7 +174,7 @@ def train_model(
 
             # Save H5 checkpoint
             h5_path = os.path.join(
-                self.checkpoint_dir, f"segmentation_model_epoch_{epoch + 1:03d}.h5"
+                self.checkpoint_dir, f"segmentation_model_epoch_{epoch + 1:03d}.weights.h5"
             )
             self.model.save_weights(h5_path)
             print(f"\nSaved H5 checkpoint for epoch {epoch + 1}")
@@ -209,14 +209,14 @@ def get_latest_checkpoint(checkpoint_dir):
     import re
 
     h5_files = sorted(
-        glob.glob(os.path.join(checkpoint_dir, "segmentation_model_epoch_*.h5")),
-        key=lambda x: int(re.search(r"epoch_(\d+)\.h5", x).group(1)),
+        glob.glob(os.path.join(checkpoint_dir, "segmentation_model_epoch_*.weights.h5")),
+        key=lambda x: int(re.search(r"epoch_(\d+)\.weights\.h5", x).group(1)),
     )
 
     # If H5 checkpoints exist, return the latest one
     if h5_files:
         latest_file = h5_files[-1]
-        latest_epoch = int(re.search(r"epoch_(\d+)\.h5", latest_file).group(1))
+        latest_epoch = int(re.search(r"epoch_(\d+)\.weights\.h5", latest_file).group(1))
         return latest_file, latest_epoch
 
     # Fallback to TensorFlow checkpoints if no H5 found
@@ -297,10 +297,167 @@ def train_two_phases(model, train_dataset, val_dataset, epochs=10, checkpoint_di
     return model, combined_history
 
 
+# Modified loss function considering skip connections
+def get_segmentation_loss():
+    class_weights = np.array([1, 1, 1, 0.05])
+    dice_loss = sm.losses.DiceLoss(class_weights=class_weights) 
+    focal_loss = sm.losses.CategoricalFocalLoss()
+    total_loss = dice_loss + (1 * focal_loss)    
+    return total_loss
+
+# Modified feature monitoring to handle dynamic shapes
+class FeatureMonitorCallback(tf.keras.callbacks.Callback):
+    def __init__(self, reference_model, monitor_layers):
+        super().__init__()
+        self.reference_model = reference_model
+        self.monitor_layers = monitor_layers
+        self.feature_distances = {layer: [] for layer in monitor_layers}
+    
+    def on_epoch_end(self, epoch, logs=None):
+        try:
+            # Get a batch of data
+            for x_batch, _ in val_dataset.take(1):
+                # Create feature extraction models
+                for layer_name in self.monitor_layers:
+                    if layer_name in self.reference_model.layers and layer_name in self.model.layers:
+                        ref_layer = self.reference_model.get_layer(layer_name)
+                        curr_layer = self.model.get_layer(layer_name)
+                        
+                        # Get features
+                        ref_features = ref_layer(x_batch)
+                        curr_features = curr_layer(x_batch)
+                        
+                        # Calculate distance
+                        if hasattr(ref_features, 'shape') and hasattr(curr_features, 'shape'):
+                            distance = tf.reduce_mean(
+                                tf.keras.losses.cosine_similarity(
+                                    tf.reshape(ref_features, [tf.shape(ref_features)[0], -1]),
+                                    tf.reshape(curr_features, [tf.shape(curr_features)[0], -1])
+                                )
+                            )
+                            self.feature_distances[layer_name].append(float(distance))
+                            
+                            if float(distance) > 0.5:
+                                print(f"\nWarning: Large feature drift in {layer_name}: {distance:.3f}")
+        except Exception as e:
+            print(f"Feature monitoring warning: {str(e)}")
+
+
+def train_gradual_unfreeze(model, train_dataset, val_dataset, epochs=30, checkpoint_dir="models"):
+    """Train with gradual unfreezing strategy, optimized for ResNet + skip connections."""
+    
+    # Create callbacks that will be used in all phases
+    base_callbacks = [
+        tf.keras.callbacks.ReduceLROnPlateau(
+            monitor="val_loss",  # Monitor validation loss
+            factor=0.5,          # Reduce LR by half
+            patience=3,          # Wait 3 epochs before reducing LR
+            min_lr=1e-6,         # Set a minimum learning rate
+            verbose=1            # Print messages when LR is updated
+        ),
+        tf.keras.callbacks.EarlyStopping(
+            monitor="val_loss", 
+            patience=5, 
+            restore_best_weights=True
+        ),
+        TrainingProgressCallback(checkpoint_dir=checkpoint_dir),
+    ]
+
+    # Store original model weights for feature monitoring
+    reference_model = tf.keras.models.clone_model(model)
+    reference_model.set_weights(model.get_weights())
+    
+    # Add feature monitoring for important skip connection layers
+    feature_monitor = FeatureMonitorCallback(
+        reference_model=reference_model,
+        monitor_layers=['conv2_block3_out', "conv3_block4_out", "conv4_block6_out"]  # Key layers with skip connections
+    )
+    if True:
+        # Phase 1: Train only decoder (3-5 epochs)
+        print("\nPhase 1: Training decoder only...")
+        for layer in model.layers:
+            if not 'decoder' in layer.name:
+                layer.trainable = False
+            else:
+                layer.trainable = True
+        
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(1e-4),
+            loss=get_segmentation_loss(),
+            metrics=[iou_metric]
+        )
+        
+        phase1_epochs = 5
+        history1 = model.fit(
+            train_dataset,
+            validation_data=val_dataset,
+            epochs=phase1_epochs,
+            callbacks=base_callbacks,
+            verbose=1
+        )
+
+        # Phase 2: Unfreeze later blocks (where skip connections come from)
+        print("\nPhase 2: Fine-tuning later encoder blocks...")
+        for layer in model.layers:
+            if "block_6" in layer.name or "block_5" in layer.name or "block_4" in layer.name:
+                layer.trainable = True
+        
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(1e-4),
+            loss=get_segmentation_loss(),
+            metrics=[iou_metric]
+        )
+        
+        phase2_epochs = 10
+        history2 = model.fit(
+            train_dataset,
+            validation_data=val_dataset,
+            initial_epoch=phase1_epochs,
+            epochs=phase1_epochs + phase2_epochs,
+            callbacks=base_callbacks + [feature_monitor],  # Add feature monitoring in phase 2
+            verbose=1
+        )
+    else:
+        model.load_weights('models/segmentation_checkpoints_imagenet/segmentation_model_epoch_015.weights.h5')
+        phase1_epochs = 5
+        phase2_epochs = 10
+
+    # Phase 3: Unfreeze remaining blocks with very low learning rate
+    print("\nPhase 3: Fine-tuning entire network...")
+    for layer in model.layers:
+        layer.trainable = True
+    
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(1e-5),
+        loss=get_segmentation_loss(),
+        metrics=[iou_metric]
+    )
+    
+    history3 = model.fit(
+        train_dataset,
+        validation_data=val_dataset,
+        initial_epoch=phase1_epochs + phase2_epochs,
+        epochs=epochs,
+        callbacks=base_callbacks + [feature_monitor],
+        verbose=1
+    )
+
+    # Combine histories
+    combined_history = {}
+    for key in history1.history:
+        combined_history[key] = (
+            history1.history[key] + 
+            history2.history[key] + 
+            history3.history[key]
+        )
+
+    return model, combined_history
+
+
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--data_path", default="/mnt/f/ssl_images/data", type=str, help="Dataset folder path"
+        "--data_path", default="data", type=str, help="Dataset folder path"
     )
     parser.add_argument(
         "--two_phases_train", action="store_true", help="Allow training in two phases"
@@ -336,6 +493,11 @@ if __name__ == "__main__":
         model = ResNet50_tf()
         #model.load_weights('models/segmentation_checkpoints_imagenet/phase1/segmentation_model_epoch_001.h5')
     print(model.summary())
+    # Check if GPU is available
+    if tf.config.list_physical_devices('GPU'):
+        print("GPU is available")
+    else:
+        print("GPU is not available")
 
     if args.pretrained_model:
         print("Loading model weights...")
@@ -359,12 +521,12 @@ if __name__ == "__main__":
     # Train the model
     print("Training the model...")
     if args.two_phases_train:
-        trained_model, history = train_two_phases(
+        trained_model, history = train_gradual_unfreeze(
             model,
             train_dataset,
             val_dataset,
-            checkpoint_dir=args.checkpoint_dir,
-            epochs=10,  # Specify total epochs for two-phase training
+            epochs=30,  # Adjust total epochs as needed
+            checkpoint_dir=args.checkpoint_dir
         )
     else:
         trained_model, history = train_model(
@@ -378,7 +540,7 @@ if __name__ == "__main__":
     checkpoint.save(final_tf_checkpoint_path)
 
     # H5 Weights
-    final_h5_path = os.path.join(args.checkpoint_dir, "final_segmentation_model.h5")
+    final_h5_path = os.path.join(args.checkpoint_dir, "final_segmentation_model.weights.h5")
     trained_model.save_weights(final_h5_path)
 
     print(f"Final model saved as TF checkpoint to {final_tf_checkpoint_path}")
