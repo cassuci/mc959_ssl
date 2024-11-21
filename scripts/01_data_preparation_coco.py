@@ -70,6 +70,15 @@ def save_segmentation_arrays(coco, data_dir, output_dir_segmentation, img_id, ca
     binary_masks = np.zeros((height, width, num_classes), dtype=np.uint8)
 
     annotations = coco.loadAnns(coco.getAnnIds(imgIds=[img_id]))
+    # Check if any annotation category is in catIds
+    contains_class = False
+    for ann in annotations:
+        if ann['category_id'] in catIds:
+            contains_class = True
+            break
+    if not contains_class:
+        return
+
     for ann in annotations:
         cat_id = ann["category_id"]
         if cat_id in catIds:
@@ -113,13 +122,13 @@ def prepare_coco_data_segmentation(data_dir, output_dir, split="train", num_samp
             "person",
             "car",
             "chair",
-            "book",
-            "bottle",
-            "cup",
-            "dining table",
-            "traffic light",
-            "bowl",
-            "handbag",
+            #"book",
+            #"bottle",
+            #"cup",
+            #"dining table",
+            #"traffic light",
+            #"bowl",
+            #"handbag",
         ]
     )
     cat_names = [cat["name"] for cat in coco.loadCats(catIds)]
@@ -144,7 +153,7 @@ if __name__ == "__main__":
     output_dir = os.path.join("/mnt/f/ssl_images/data", "processed")
 
     # prepare_coco_data_colorization(coco_dir, output_dir)
-    prepare_coco_data_segmentation(coco_dir, output_dir, "train", num_samples=10000)
-    prepare_coco_data_segmentation(coco_dir, output_dir, "val", num_samples=2000)
+    prepare_coco_data_segmentation(coco_dir, output_dir, "train", num_samples=3200)
+    prepare_coco_data_segmentation(coco_dir, output_dir, "val", num_samples=320)
 
     print("Data preparation completed successfully!")
