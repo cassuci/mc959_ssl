@@ -317,7 +317,7 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_di
     print("=" * 50, "\n")
 
     # Initialize loss function with weights
-    loss_fn = ColorizationLoss(vgg_weight=0.5, l1_weight=1.0)
+    loss_fn = ColorizationLoss(vgg_weight=float(1e-7), l1_weight=1.0)
 
     # Custom metric for monitoring L1 loss only
     def l1_metric(y_true, y_pred):
@@ -371,10 +371,10 @@ if __name__ == "__main__":
 
     # Set up paths
     data_dir = os.path.join("/mnt/f/ssl_images/data", "processed", "coco", "colorization")
-    checkpoint_dir = os.path.join("models", "checkpoints")
+    checkpoint_dir = os.path.join("models", "checkpoints_color_resnet18_new_decoder_vgg")
 
     # Initialize model
-    model = ResNet50((224, 224, 1), mode="colorization")
+    model = ResNet18((224, 224, 1), mode="colorization")
 
     print("Training colorization model...")
     history = train_colorization(
@@ -382,7 +382,7 @@ if __name__ == "__main__":
     )
 
     # Save the final model
-    save_path = os.path.join("models", "colorization_model_resnet50.h5")
+    save_path = os.path.join("models", "color_resnet18_new_decoder_vgg.h5")
     model.save_weights(save_path)
     print(f"Final model saved to {save_path}")
     print("Colorization training completed successfully!")

@@ -132,3 +132,44 @@ def ResNet34(input_shape=(224, 224, 3), mode="classification"):
 
 def ResNet50(input_shape=(224, 224, 3), mode="classification"):
     return ResNet(input_shape, [3, 4, 6, 3], name="ResNet50", mode=mode)
+
+
+def ResNet50_tf():
+    import tensorflow as tf
+    from tensorflow.keras import layers, models
+
+    # Load the ResNet50 model with ImageNet weights, excluding the top classification layers
+    base_model = tf.keras.applications.ResNet50(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+
+    # Get the output of several layers of the encoder for residual connections
+    encoder_output_1 = base_model.get_layer('conv2_block3_out').output  # Early layer
+    encoder_output_2 = base_model.get_layer('conv3_block4_out').output  # Mid layer
+    encoder_output_3 = base_model.get_layer('conv4_block6_out').output  # Later layer
+    x = base_model.get_layer('conv5_block3_out').output  # Last layer of the encoder
+
+    # Upsample using UpSampling2D followed by Conv2D layers, adding residual connections from the encoder
+    x = layers.UpSampling2D(size=(2, 2), interpolation='bilinear', name='decoder_upsample_1')(x)  # Upsample by a factor of 2
+    x = layers.Conv2D(1024, (3, 3), padding='same', activation='relu', name='decoder_conv2d_1')(x)  # Conv2D layer
+    x = layers.concatenate([x, encoder_output_3], axis=-1, name='decoder_res_1')  # Residual connection from encoder
+
+    x = layers.UpSampling2D(size=(2, 2), interpolation='bilinear', name='decoder_upsample_2')(x)  # Upsample by another factor of 2
+    x = layers.Conv2D(512, (3, 3), padding='same', activation='relu', name='decoder_conv2d_2')(x)  # Conv2D layer
+    x = layers.concatenate([x, encoder_output_2], axis=-1, name='decoder_res_2')  # Residual connection from encoder
+
+    x = layers.UpSampling2D(size=(2, 2), interpolation='bilinear', name='decoder_upsample_3')(x)  # Another upsampling
+    x = layers.Conv2D(256, (3, 3), padding='same', activation='relu', name='decoder_conv2d_3')(x)  # Conv2D layer
+    x = layers.concatenate([x, encoder_output_1], axis=-1, name='decoder_res_3')  # Residual connection from encoder
+
+    x = layers.UpSampling2D(size=(2, 2), interpolation='bilinear', name='decoder_upsample_4')(x)  # Another upsampling
+    x = layers.Conv2D(128, (3, 3), padding='same', activation='relu', name='decoder_conv2d_4')(x)  # Conv2D layer
+
+    # Final layer to adjust the depth to 11 channels
+    x = layers.UpSampling2D(size=(2, 2), interpolation='bilinear', name='decoder_upsample_5')(x)  # Upsample to 224x224
+    x = layers.Conv2D(4, (3, 3), padding='same', activation='softmax', name='decoder_output')(x)  # Output shape (224, 224, 4)
+
+    # Create the new customized model
+    model = models.Model(inputs=base_model.input, outputs=x)
+
+    # Print the model summary
+    return model
+

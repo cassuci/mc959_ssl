@@ -11,12 +11,12 @@ import segmentation_models as sm
 
 # Add the project root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from src.models.resnet import ResNet18, load_encoder_weights
+from src.models.resnet import ResNet18, load_encoder_weights, ResNet50_tf
 from src.libs.data_loading import create_dataset_segmentation
 
 
 def iou_metric(
-    y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 10, threshold: float = 0.5
+    y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 3, threshold: float = 0.5
 ) -> tf.Tensor:
     # Binarize predictions
     y_pred_bin = tf.cast(y_pred > threshold, tf.float32)
@@ -149,15 +149,14 @@ def train_model(
 
     # Segmentation models losses can be combined together by '+' and scaled by integer or float factor
     # set class weights for dice_loss (car: 1.; pedestrian: 2.; background: 0.5;)
-    class_weights = np.array([0.5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0.5])
-    #class_weights = np.array([1., 5., 15., 11., 10., 8., 10., 5., 6., 14., 0.5])
+    class_weights = np.array([1, 1, 1, 0.05])
     dice_loss = sm.losses.DiceLoss(class_weights=class_weights) 
     focal_loss = sm.losses.CategoricalFocalLoss()
     total_loss = dice_loss + (1 * focal_loss)
 
     # Compile the model
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(1e-4),
+        optimizer=tf.keras.optimizers.Adam(1e-5),
         loss=total_loss,
         #loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),
         metrics=[iou_metric],
@@ -238,7 +237,8 @@ def train_two_phases(model, train_dataset, val_dataset, epochs=10, checkpoint_di
     print("\nPhase 1: Training with frozen encoder...")
     # Freeze only the encoder layers (those named "block_*")
     for layer in model.layers:
-        if "block_" in layer.name:
+        #if "block_" in layer.name:
+        if "decoder" not in layer.name:
             layer.trainable = False
         else:
             layer.trainable = True
@@ -259,7 +259,7 @@ def train_two_phases(model, train_dataset, val_dataset, epochs=10, checkpoint_di
         model,
         train_dataset,
         val_dataset,
-        epochs=1,
+        epochs=10,
         initial_epoch=0,
         checkpoint_dir=phase1_checkpoint_dir,
         load_latest_checkpoint=False,  # Prevent loading a checkpoint in the first phase
@@ -273,7 +273,7 @@ def train_two_phases(model, train_dataset, val_dataset, epochs=10, checkpoint_di
 
     # Recompile the model again
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(1e-4),
+        optimizer=tf.keras.optimizers.Adam(1e-5),
         loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),
         metrics=[iou_metric],
     )
@@ -332,7 +332,9 @@ if __name__ == "__main__":
     if args.single_channel:
         model = ResNet18((224, 224, 1), mode="segmentation")
     else:
-        model = ResNet18((224, 224, 3), mode="segmentation")
+        #model = ResNet18((224, 224, 3), mode="segmentation")
+        model = ResNet50_tf()
+        #model.load_weights('models/segmentation_checkpoints_imagenet/phase1/segmentation_model_epoch_001.h5')
     print(model.summary())
 
     if args.pretrained_model:
@@ -344,13 +346,13 @@ if __name__ == "__main__":
     train_dataset = create_dataset_segmentation(
         data_dir,
         split="train",
-        batch_size=32,
+        batch_size=16,
         single_channel=args.single_channel,
     )
     val_dataset = create_dataset_segmentation(
         data_dir,
         split="val",
-        batch_size=32,
+        batch_size=16,
         single_channel=args.single_channel,
     )
 
@@ -384,4 +386,5 @@ if __name__ == "__main__":
 
 """
 python scripts/03_segmentation_task_training.py --two_phases_train --single_channel --checkpoint_dir models/segmentation_checkpoints_no_weights
+python scripts/03_segmentation_task_training.py --two_phases_train --checkpoint_dir models/segmentation_checkpoints_imagenet
 """

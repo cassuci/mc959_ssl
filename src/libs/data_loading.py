@@ -148,6 +148,7 @@ def load_segmentation_data(data_dir, split="train", single_channel=False):
     if split == "train":
         images = images[:split_idx]
         masks = masks[:split_idx]
+        print(images[:2])
     elif split == "val":
         images = images[split_idx:]
         masks = masks[split_idx:]
@@ -169,4 +170,4 @@ def load_segmentation_data(data_dir, split="train", single_channel=False):
 def create_dataset_segmentation(data_dir, split, batch_size, single_channel=False):
     """Load the data and prepare it as a batched tf.data.Dataset."""
     dataset = load_segmentation_data(data_dir, split, single_channel)
-    return dataset.shuffle(500).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    return dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
