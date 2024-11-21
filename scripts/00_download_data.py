@@ -72,12 +72,12 @@ def download_and_extract_pascal_voc(data_dir):
 
 
 if __name__ == "__main__":
-    # coco_dir = os.path.join("/mnt/f/ssl_images/data", "coco")
-    # coco_dir = os.path.join("F:\\ssl_images\\data", "coco")
+    coco_dir = os.path.join("data", "coco")
+    #coco_dir = os.path.join("F:\\ssl_images\\data", "coco")
     # pascal_voc_dir = os.path.join("/mnt/f/ssl_images/data", "pascal_voc")
-    pascal_voc_dir = os.path.join("F:\\ssl_images\\data", "pascal_voc")
+    # pascal_voc_dir = os.path.join("data", "pascal_voc")
 
-    # download_and_extract_coco(coco_dir)
-    download_and_extract_pascal_voc(pascal_voc_dir)
+    download_and_extract_coco(coco_dir)
+    #download_and_extract_pascal_voc(pascal_voc_dir)
 
     print("Datasets downloaded and extracted successfully!")

@@ -149,11 +149,11 @@ def prepare_coco_data_segmentation(data_dir, output_dir, split="train", num_samp
 
 
 if __name__ == "__main__":
-    coco_dir = os.path.join("/mnt/f/ssl_images/data", "coco")
-    output_dir = os.path.join("/mnt/f/ssl_images/data", "processed")
+    coco_dir = os.path.join("data", "coco")
+    output_dir = os.path.join("data", "processed")
 
     # prepare_coco_data_colorization(coco_dir, output_dir)
-    prepare_coco_data_segmentation(coco_dir, output_dir, "train", num_samples=6400)
-    prepare_coco_data_segmentation(coco_dir, output_dir, "val", num_samples=640)
+    prepare_coco_data_segmentation(coco_dir, output_dir, "train", num_samples=10000)
+    prepare_coco_data_segmentation(coco_dir, output_dir, "val", num_samples=2000)
 
     print("Data preparation completed successfully!")
