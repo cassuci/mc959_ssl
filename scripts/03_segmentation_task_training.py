@@ -16,7 +16,7 @@ from src.libs.data_loading import create_dataset_segmentation
 
 
 def iou_metric(
-    y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 10, threshold: float = 0.5
+    y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 3, threshold: float = 0.5
 ) -> tf.Tensor:
     # Binarize predictions
     y_pred_bin = tf.cast(y_pred > threshold, tf.float32)
@@ -149,8 +149,7 @@ def train_model(
 
     # Segmentation models losses can be combined together by '+' and scaled by integer or float factor
     # set class weights for dice_loss (car: 1.; pedestrian: 2.; background: 0.5;)
-    class_weights = np.array([0.5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0.5])
-    #class_weights = np.array([1., 5., 15., 11., 10., 8., 10., 5., 6., 14., 0.5])
+    class_weights = np.array([1., 1., 1., 0.1])
     dice_loss = sm.losses.DiceLoss(class_weights=class_weights) 
     focal_loss = sm.losses.CategoricalFocalLoss()
     total_loss = dice_loss + (1 * focal_loss)
@@ -366,7 +365,7 @@ if __name__ == "__main__":
         )
     else:
         trained_model, history = train_model(
-            model, train_dataset, val_dataset, checkpoint_dir=args.checkpoint_dir
+            model, train_dataset, val_dataset, checkpoint_dir=args.checkpoint_dir, epochs=20
         )
 
     # Save the final model in both formats

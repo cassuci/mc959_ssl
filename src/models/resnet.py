@@ -91,7 +91,7 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification"):
             x = upsample_block(x, skip, filters, f"decoder_seg_{i}")
 
         # Final output layer
-        outputs = tf.keras.layers.Conv2D(11, 3, padding="same", activation="softmax", name="output_conv_seg")(
+        outputs = tf.keras.layers.Conv2D(4, 3, padding="same", activation="softmax", name="output_conv_seg")(
             x
         )
 
