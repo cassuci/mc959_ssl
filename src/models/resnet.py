@@ -139,7 +139,7 @@ def ResNet50_tf():
     from tensorflow.keras import layers, models
 
     # Load the ResNet50 model with ImageNet weights, excluding the top classification layers
-    base_model = tf.keras.applications.ResNet50(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+    base_model = tf.keras.applications.ResNet50(weights=None, include_top=False, input_shape=(224, 224, 3))
 
     # Extract outputs from multiple encoder layers for skip connections
     encoder_outputs = {

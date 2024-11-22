@@ -164,6 +164,8 @@ def load_segmentation_data(data_dir, split="train", single_channel=False):
     elif split == "val":
         images = images[split_idx:]
         masks = masks[split_idx:]
+    elif split == 'test':
+        print(images[:2])
 
     # Create a tf.data.Dataset from filenames and labels
     dataset = tf.data.Dataset.from_tensor_slices((images, masks))

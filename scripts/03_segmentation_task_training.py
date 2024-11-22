@@ -113,7 +113,7 @@ def train_model(
     model,
     train_dataset,
     val_dataset,
-    epochs=10,
+    epochs=30,
     initial_epoch=0,
     checkpoint_dir="models",
     load_latest_checkpoint=False,
@@ -149,16 +149,12 @@ def train_model(
 
     # Segmentation models losses can be combined together by '+' and scaled by integer or float factor
     # set class weights for dice_loss (car: 1.; pedestrian: 2.; background: 0.5;)
-    class_weights = np.array([1, 1, 1, 0.05])
-    dice_loss = sm.losses.DiceLoss(class_weights=class_weights) 
-    focal_loss = sm.losses.CategoricalFocalLoss()
-    total_loss = dice_loss + (1 * focal_loss)
+    total_loss = get_segmentation_loss()
 
     # Compile the model
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(1e-5),
+        optimizer=tf.keras.optimizers.Adam(1e-4),
         loss=total_loss,
-        #loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),
         metrics=[iou_metric],
     )
 
@@ -172,12 +168,13 @@ def train_model(
             # Save TensorFlow checkpoint
             checkpoint_manager.save()
 
-            # Save H5 checkpoint
-            h5_path = os.path.join(
-                self.checkpoint_dir, f"segmentation_model_epoch_{epoch + 1:03d}.weights.h5"
-            )
-            self.model.save_weights(h5_path)
-            print(f"\nSaved H5 checkpoint for epoch {epoch + 1}")
+            if epoch%5==0:
+                # Save H5 checkpoint
+                h5_path = os.path.join(
+                    self.checkpoint_dir, f"segmentation_model_epoch_{epoch + 1:03d}.weights.h5"
+                )
+                self.model.save_weights(h5_path)
+                print(f"\nSaved H5 checkpoint for epoch {epoch + 1}")
 
     callbacks = [
         CustomCheckpointCallback(checkpoint_dir),
