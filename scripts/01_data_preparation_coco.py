@@ -73,7 +73,7 @@ def save_segmentation_arrays(coco, data_dir, output_dir_segmentation, img_id, ca
     # Check if any annotation category is in catIds
     contains_class = False
     for ann in annotations:
-        if ann['category_id'] in catIds:
+        if ann["category_id"] in catIds:
             contains_class = True
             break
     if not contains_class:
@@ -122,13 +122,13 @@ def prepare_coco_data_segmentation(data_dir, output_dir, split="train", num_samp
             "person",
             "car",
             "chair",
-            #"book",
-            #"bottle",
-            #"cup",
-            #"dining table",
-            #"traffic light",
-            #"bowl",
-            #"handbag",
+            # "book",
+            # "bottle",
+            # "cup",
+            # "dining table",
+            # "traffic light",
+            # "bowl",
+            # "handbag",
         ]
     )
     cat_names = [cat["name"] for cat in coco.loadCats(catIds)]
