@@ -105,12 +105,24 @@ def train_two_phases(model, train_dataset, val_dataset, epochs=10):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", default="/mnt/f/ssl_images/data", type=str, help="Dataset folder path")
-    parser.add_argument("--two_phases_train", action='store_true', help="Allow training in two phases")
-    parser.add_argument("--pretrained_model", default=None, type=str, help="Path to pretrained model")
-    parser.add_argument("--single_channel", action='store_true', help="To use grayscale images")
-    parser.add_argument("--checkpoint_dir", default='classification_ckpt', type=str, help="Prefix to the saved model path")
+    parser.add_argument(
+        "--data_path", default="/mnt/f/ssl_images/data", type=str, help="Dataset folder path"
+    )
+    parser.add_argument(
+        "--two_phases_train", action="store_true", help="Allow training in two phases"
+    )
+    parser.add_argument(
+        "--pretrained_model", default=None, type=str, help="Path to pretrained model"
+    )
+    parser.add_argument("--single_channel", action="store_true", help="To use grayscale images")
+    parser.add_argument(
+        "--checkpoint_dir",
+        default="classification_ckpt",
+        type=str,
+        help="Prefix to the saved model path",
+    )
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     args = get_args()
