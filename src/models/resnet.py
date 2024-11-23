@@ -50,10 +50,12 @@ def upsample_block(x, skip_connection, filters, name_prefix):
     return x
 
 
-def ResNet(input_shape, block_sizes, name="ResNet", mode="classification"):
+def ResNet(input_shape, block_sizes, name="ResNet", mode="classification", num_classes=None):
 
     assert mode in ['classification', 'segmentation', 'colorization', 'inpainting'], \
            "Invalid mode. Choose either 'classification', 'segmentation', 'colorization' or 'inpainting'."
+    
+    num_classes = num_classes if num_classes else 20
 
     inputs = tf.keras.Input(shape=input_shape)
 
@@ -79,7 +81,7 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification"):
         #x = tf.keras.layers.Flatten(name='flatten')(x)
         #x = tf.keras.layers.Dense(500, activation='relu', name='cls_1')(x)
         #x = tf.keras.layers.Dense(500, activation='relu', name='cls_2')(x)
-        outputs = tf.keras.layers.Dense(20, activation='sigmoid', name="predictions_cls")(x)
+        outputs = tf.keras.layers.Dense(num_classes, activation='sigmoid', name="predictions_cls")(x)
 
     elif mode == 'segmentation':
         # Decoder pathway with skip connections
@@ -122,13 +124,13 @@ def load_encoder_weights(model, weights_path):
     model.load_weights(weights_path, skip_mismatch=True, by_name=True)
 
 
-def ResNet18(input_shape=(224, 224, 3), mode="classification"):
-    return ResNet(input_shape, [2, 2, 2, 2], name="ResNet18", mode=mode)
+def ResNet18(input_shape=(224, 224, 3), mode="classification", num_classes=None):
+    return ResNet(input_shape, [2, 2, 2, 2], name="ResNet18", mode=mode, num_classes=num_classes)
 
 
-def ResNet34(input_shape=(224, 224, 3), mode="classification"):
-    return ResNet(input_shape, [3, 4, 6, 3], name="ResNet34", mode=mode)
+def ResNet34(input_shape=(224, 224, 3), mode="classification", num_classes=None):
+    return ResNet(input_shape, [3, 4, 6, 3], name="ResNet34", mode=mode, num_classes=num_classes)
 
 
-def ResNet50(input_shape=(224, 224, 3), mode="classification"):
-    return ResNet(input_shape, [3, 4, 6, 3], name="ResNet50", mode=mode)
+def ResNet50(input_shape=(224, 224, 3), mode="classification", num_classes=None):
+    return ResNet(input_shape, [3, 4, 6, 3], name="ResNet50", mode=mode, num_classes=num_classes)
