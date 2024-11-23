@@ -27,16 +27,22 @@ pascal_voc_classes = [
     "sofa",
     "tvmonitor",
 ]
-pascal_label2int = {label: index for index, label in enumerate(pascal_voc_classes)}
-pascal_int2label = {index: label for index, label in enumerate(pascal_voc_classes)}
 
-
-def objects_to_labels(objects, num_classes=20):
+def objects_to_labels(objects, classes=None):
     """Transforms objects to int labels."""
-    labels = np.zeros(num_classes)
+  
+    if not classes:
+        classes = pascal_voc_classes
+
+    # Assert all classes of interest are valid pascal voc classes
+    assert all(class_name in pascal_voc_classes for class_name in classes)
+
+    label2int = {label: index for index, label in enumerate(classes)}
+
+    labels = np.zeros(len(classes))
     for obj in objects:
-        assert obj in pascal_voc_classes, f"{obj} not in Pascal VOC classes list"
-        labels[pascal_label2int[obj]] = 1
+        if obj in classes:
+            labels[label2int[obj]] = 1
     return labels
 
 
@@ -60,7 +66,7 @@ def parse_function_classification(filename, label, data_dir, single_channel=Fals
     return image, label
 
 
-def load_classification_data(data_dir, split_list_file, single_channel=False):
+def load_classification_data(data_dir, split_list_file, single_channel=False, classes=None):
     """Create a tf.data.Dataset for the classification task."""
     task_dir = os.path.join(data_dir, "classification")
 
@@ -77,7 +83,7 @@ def load_classification_data(data_dir, split_list_file, single_channel=False):
     labels = []
     for filename in split_files:
         filenames.append(filename)
-        labels.append(objects_to_labels(annotations[filename]))
+        labels.append(objects_to_labels(annotations[filename], classes))
 
     labels = np.array(labels).astype(np.float32)
 
@@ -95,9 +101,9 @@ def load_classification_data(data_dir, split_list_file, single_channel=False):
     return dataset
 
 
-def create_dataset_classification(data_dir, split_list_file, batch_size, single_channel=False):
+def create_dataset_classification(data_dir, split_list_file, batch_size, single_channel=False, classes=None):
     """Load the data and prepare it as a batched tf.data.Dataset."""
-    dataset = load_classification_data(data_dir, split_list_file, single_channel)
+    dataset = load_classification_data(data_dir, split_list_file, single_channel, classes)
     return dataset.shuffle(500).batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
 
