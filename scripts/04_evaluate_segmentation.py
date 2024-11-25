@@ -194,7 +194,7 @@ def evaluate_model(model, test_dataset, evaluator, num_classes=3):
         max_channel_indices = np.argmax(y_pred, axis=-1)  # Shape: (batch, height, width)
 
         # Create a one-hot encoded mask
-        y_pred = np.zeros_like(y_pred, dtype=np.uint8)  # Shape: (batch, height, width, channels)
+        y_pred_argmax = np.zeros_like(y_pred, dtype=np.uint8)  # Shape: (batch, height, width, channels)
 
         # Create meshgrid for all dimensions
         batch_size, height, width = max_channel_indices.shape
@@ -204,10 +204,10 @@ def evaluate_model(model, test_dataset, evaluator, num_classes=3):
                                                 indexing='ij')
 
         # Set the appropriate indices to 1
-        y_pred[batch_idx, row_idx, col_idx, max_channel_indices] = 1
+        y_pred_argmax[batch_idx, row_idx, col_idx, max_channel_indices] = 1
         
         # Compute IoU for each class
-        batch_ious = iou_metric(y_batch, y_pred, num_classes=num_classes)
+        batch_ious = iou_metric(y_batch, y_pred_argmax, num_classes=num_classes)
         class_ious += np.array(batch_ious)
 
         for j in range(x_batch.shape[0]):
@@ -332,5 +332,6 @@ if __name__ == "__main__":
 """
 Example usage:
 python scripts/04_evaluate_segmentation.py --model_path models/checkpoints_seg_resnet18_new_decoder_vgg_10k/final_segmentation_model.weights.h5 --single_channel
+python scripts/04_evaluate_segmentation.py --model_path tf218_color_seg.keras --single_channel
 python scripts/04_evaluate_segmentation.py --model_path models/balbi/best_segmentation_model.keras
 """
