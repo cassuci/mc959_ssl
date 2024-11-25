@@ -143,10 +143,10 @@ class COCOSegmentationEvaluator:
 
 
 def iou_metric(
-    y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 3, threshold: float = 0.5
+    y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 3
 ) -> tf.Tensor:
     # Binarize predictions
-    y_pred_bin = tf.cast(y_pred > threshold, tf.float32)
+    y_pred_bin = tf.cast(y_pred, tf.float32)
 
     # Initialize list to store IoU for each class
     ious = []
@@ -191,11 +191,20 @@ def evaluate_model(model, test_dataset, evaluator, num_classes=3):
         y_pred = model.predict(x_batch, verbose=0)
         
         # Get the index of the highest value in the last axis (channels)
-        max_channel_indices = np.argmax(y_pred_i, axis=-1)
+        max_channel_indices = np.argmax(y_pred, axis=-1)  # Shape: (batch, height, width)
 
-        # Create a one-hot encoded mask: for each pixel, set the index of the max channel to 1, others to 0
-        y_pred_i = np.zeros_like(y_pred_i, dtype=np.uint8)  # Initialize an array of zeros with the same shape
-        y_pred_i[np.arange(y_pred_i.shape[0])[:, None], np.arange(y_pred_i.shape[1]), max_channel_indices] = 1
+        # Create a one-hot encoded mask
+        y_pred = np.zeros_like(y_pred, dtype=np.uint8)  # Shape: (batch, height, width, channels)
+
+        # Create meshgrid for all dimensions
+        batch_size, height, width = max_channel_indices.shape
+        batch_idx, row_idx, col_idx = np.meshgrid(np.arange(batch_size),
+                                                np.arange(height),
+                                                np.arange(width),
+                                                indexing='ij')
+
+        # Set the appropriate indices to 1
+        y_pred[batch_idx, row_idx, col_idx, max_channel_indices] = 1
         
         # Compute IoU for each class
         batch_ious = iou_metric(y_batch, y_pred, num_classes=num_classes)
@@ -205,7 +214,7 @@ def evaluate_model(model, test_dataset, evaluator, num_classes=3):
             # Load ground truth mask
             y_i = y_batch[j].numpy().astype(np.uint8)  # Cast y_true to uint8
 
-            y_pred_i = y_pred[j].numpy()
+            y_pred_i = y_pred[j]
 
             # Skip if y_true is all zeros
             if np.sum(y_i[:, :, :10]) == 0:
@@ -262,7 +271,7 @@ if __name__ == "__main__":
     import os
     import tensorflow as tf
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
     # Set random seeds for reproducibility
     tf.random.set_seed(42)
     np.random.seed(42)
@@ -291,7 +300,7 @@ if __name__ == "__main__":
 
     
     # Define the selected category IDs based on the list of classes to evaluate
-    annotations_path = os.path.join(data_dir, "annotations", f"instances_val2017.json")
+    annotations_path = os.path.join(args.data_path, 'coco', "annotations", f"instances_val2017.json")
     coco = COCO(annotations_path)
     selected_cat_ids = coco.getCatIds(
         catNms=[
