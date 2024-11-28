@@ -51,11 +51,11 @@ def iou_metric(
 
 class TrainingProgressCallback(tf.keras.callbacks.Callback):
     """Custom callback to track and save training progress with improved model saving."""
-    
-    def __init__(self, checkpoint_dir="models", save_freq=1, save_format='h5'):
+
+    def __init__(self, checkpoint_dir="models", save_freq=1, save_format="h5"):
         """
         Initialize the callback with configurable save format.
-        
+
         Args:
             checkpoint_dir (str): Directory to save checkpoints
             save_freq (int): Frequency of saving checkpoints (in epochs)
@@ -67,11 +67,11 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
         self.save_format = save_format
         self.best_val_loss = float("inf")
         os.makedirs(checkpoint_dir, exist_ok=True)
-        
+
         # Load existing history if it exists
         self.history = self._load_history()
         self.best_val_loss = self._load_best_val_loss()
-    
+
     def _load_history(self):
         """Load training history from file if it exists."""
         history_path = os.path.join(self.checkpoint_dir, "training_history.npy")
@@ -81,37 +81,31 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
             except:
                 return self._initialize_history()
         return self._initialize_history()
-    
+
     def _load_best_val_loss(self):
         """Load best validation loss from file if it exists."""
         best_loss_path = os.path.join(self.checkpoint_dir, "best_val_loss.npy")
         if os.path.exists(best_loss_path):
             return float(np.load(best_loss_path))
         return float("inf")
-    
+
     def _initialize_history(self):
         """Initialize empty history dictionary."""
-        return {
-            "loss": [],
-            "val_loss": [],
-            "iou_metric": [],
-            "val_iou_metric": [],
-            "lr": []
-        }
-    
+        return {"loss": [], "val_loss": [], "iou_metric": [], "val_iou_metric": [], "lr": []}
+
     def _save_model(self, filepath):
         """Save model with proper configuration."""
-        if self.save_format == 'h5':
+        if self.save_format == "h5":
             # Save as HDF5 format
-            self.model.save(filepath, save_format='h5')
+            self.model.save(filepath, save_format="h5")
         else:
             # Save in TensorFlow SavedModel format
-            self.model.save(filepath, save_format='tf')
-    
+            self.model.save(filepath, save_format="tf")
+
     def on_epoch_end(self, epoch, logs=None):
         """Handle end of epoch operations including model saving."""
         logs = logs or {}
-        
+
         # Update history
         for metric in self.history.keys():
             if metric in logs:
@@ -119,39 +113,32 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
             elif metric == "lr":
                 lr = K.get_value(self.model.optimizer.learning_rate)
                 self.history["lr"].append(lr)
-        
+
         # Save periodic checkpoint
         if (epoch + 1) % self.save_freq == 0:
             checkpoint_path = os.path.join(
-                self.checkpoint_dir,
-                f"segmentation_model_epoch_{epoch + 1:03d}"
+                self.checkpoint_dir, f"segmentation_model_epoch_{epoch + 1:03d}"
             )
-            if self.save_format == 'h5':
-                checkpoint_path += '.h5'
+            if self.save_format == "h5":
+                checkpoint_path += ".h5"
             self._save_model(checkpoint_path)
             print(f"\nSaved periodic checkpoint for epoch {epoch + 1}")
-        
+
         # Save best model
         current_val_loss = logs.get("val_loss", float("inf"))
         if current_val_loss < self.best_val_loss:
             self.best_val_loss = current_val_loss
-            best_model_path = os.path.join(
-                self.checkpoint_dir,
-                "best_segmentation_model"
-            )
-            if self.save_format == 'h5':
-                best_model_path += '.h5'
-            
+            best_model_path = os.path.join(self.checkpoint_dir, "best_segmentation_model")
+            if self.save_format == "h5":
+                best_model_path += ".h5"
+
             # Save complete model
             self._save_model(best_model_path)
-            
+
             # Save best validation loss
-            np.save(
-                os.path.join(self.checkpoint_dir, "best_val_loss.npy"),
-                self.best_val_loss
-            )
+            np.save(os.path.join(self.checkpoint_dir, "best_val_loss.npy"), self.best_val_loss)
             print(f"\nNew best model saved with validation loss: {self.best_val_loss:.6f}")
-        
+
         # Save training history
         history_path = os.path.join(self.checkpoint_dir, "training_history.npy")
         np.save(history_path, self.history)
@@ -297,7 +284,7 @@ def train_gradual_unfreeze(model, train_dataset, val_dataset, epochs=30, checkpo
         tf.keras.callbacks.EarlyStopping(
             monitor="val_loss", patience=5, restore_best_weights=True
         ),
-        TrainingProgressCallback(checkpoint_dir=checkpoint_dir, save_format='tf'),
+        TrainingProgressCallback(checkpoint_dir=checkpoint_dir, save_format="tf"),
     ]
 
     # Store original model weights for feature monitoring
@@ -388,9 +375,7 @@ def train_gradual_unfreeze(model, train_dataset, val_dataset, epochs=30, checkpo
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--data_path", default="/mnt/f/ssl_images/data", type=str, help="Dataset folder path"
-    )
+    parser.add_argument("--data_path", default="data", type=str, help="Dataset folder path")
     parser.add_argument(
         "--two_phases_train", action="store_true", help="Allow training in two phases"
     )
@@ -427,7 +412,6 @@ if __name__ == "__main__":
     if args.pretrained_model:
         print("Loading model weights...")
         load_encoder_weights(model, args.pretrained_model)
-
 
     # Load data and create dataset
     print("Loading data and creating dataset...")

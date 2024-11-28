@@ -1,3 +1,4 @@
+import argparse
 import os
 import sys
 import numpy as np
@@ -148,13 +149,64 @@ def prepare_coco_data_segmentation(data_dir, output_dir, split="train", num_samp
         )
 
 
-if __name__ == "__main__":
-    coco_dir = os.path.join("/mnt/f/ssl_images/data", "coco")
-    output_dir = os.path.join("/mnt/f/ssl_images/data", "processed")
+def main(
+    coco_dir,
+    output_dir,
+    colorization_samples,
+    segmentation_train_samples,
+    segmentation_val_samples,
+):
+    """Prepare COCO dataset for colorization and segmentation tasks."""
+    prepare_coco_data_colorization(coco_dir, output_dir, num_samples=colorization_samples)
 
-    # prepare_coco_data_colorization(coco_dir, output_dir)
-    
-    prepare_coco_data_segmentation(coco_dir, output_dir, "train", num_samples=None)
-    prepare_coco_data_segmentation(coco_dir, output_dir, "val", num_samples=None)
+    prepare_coco_data_segmentation(
+        coco_dir, output_dir, "train", num_samples=segmentation_train_samples
+    )
+    prepare_coco_data_segmentation(
+        coco_dir, output_dir, "val", num_samples=segmentation_val_samples
+    )
 
     print("Data preparation completed successfully!")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Prepare COCO dataset for various tasks.")
+    parser.add_argument(
+        "--coco_dir",
+        type=str,
+        default=os.path.join("data", "coco"),
+        help="Directory where the COCO dataset is stored. Default: 'data/coco'.",
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default=os.path.join("data", "processed"),
+        help="Directory to store the processed data. Default: 'data/processed'.",
+    )
+    parser.add_argument(
+        "--colorization_samples",
+        type=int,
+        default=1000,
+        help="Number of samples for colorization task. Default: 1000.",
+    )
+    parser.add_argument(
+        "--segmentation_train_samples",
+        type=int,
+        default=1000,
+        help="Number of samples for segmentation (train split). Default: 1000.",
+    )
+    parser.add_argument(
+        "--segmentation_val_samples",
+        type=int,
+        default=200,
+        help="Number of samples for segmentation (validation split). Default: 200.",
+    )
+
+    args = parser.parse_args()
+    main(
+        coco_dir=args.coco_dir,
+        output_dir=args.output_dir,
+        colorization_samples=args.colorization_samples,
+        segmentation_train_samples=args.segmentation_train_samples,
+        segmentation_val_samples=args.segmentation_val_samples,
+    )

@@ -5,6 +5,7 @@ import urllib.request
 import tarfile
 import zipfile
 import shutil
+import argparse
 from tqdm import tqdm
 
 
@@ -18,22 +19,32 @@ def download_file(url, filename):
 
 def download_and_extract_coco(data_dir):
     """Download and extract COCO dataset."""
-    coco_url = "http://images.cocodataset.org/zips/train2017.zip"
+    train_url = "http://images.cocodataset.org/zips/train2017.zip"
+    val_url = "http://images.cocodataset.org/zips/val2017.zip"
     annotations_url = "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
 
     os.makedirs(data_dir, exist_ok=True)
 
-    # Download images
-    print("Downloading COCO images...")
-    download_file(coco_url, os.path.join(data_dir, "train2017.zip"))
+    # Download train images
+    print("Downloading COCO train images...")
+    download_file(train_url, os.path.join(data_dir, "train2017.zip"))
+
+    # Download val images
+    print("Downloading COCO validation images...")
+    download_file(val_url, os.path.join(data_dir, "val2017.zip"))
 
     # Download annotations
     print("Downloading COCO annotations...")
     download_file(annotations_url, os.path.join(data_dir, "annotations_trainval2017.zip"))
 
-    # Extract images
-    print("Extracting COCO images...")
+    # Extract train images
+    print("Extracting COCO train images...")
     with zipfile.ZipFile(os.path.join(data_dir, "train2017.zip"), "r") as zip_ref:
+        zip_ref.extractall(data_dir)
+
+    # Extract val images
+    print("Extracting COCO validation images...")
+    with zipfile.ZipFile(os.path.join(data_dir, "val2017.zip"), "r") as zip_ref:
         zip_ref.extractall(data_dir)
 
     # Extract annotations
@@ -43,6 +54,7 @@ def download_and_extract_coco(data_dir):
 
     # Clean up zip files
     os.remove(os.path.join(data_dir, "train2017.zip"))
+    os.remove(os.path.join(data_dir, "val2017.zip"))
     os.remove(os.path.join(data_dir, "annotations_trainval2017.zip"))
 
 
@@ -71,13 +83,27 @@ def download_and_extract_pascal_voc(data_dir):
     os.remove(os.path.join(data_dir, "VOCtrainval_11-May-2012.tar"))
 
 
-if __name__ == "__main__":
-    # coco_dir = os.path.join("/mnt/f/ssl_images/data", "coco")
-    # coco_dir = os.path.join("F:\\ssl_images\\data", "coco")
-    # pascal_voc_dir = os.path.join("/mnt/f/ssl_images/data", "pascal_voc")
-    pascal_voc_dir = os.path.join("F:\\ssl_images\\data", "pascal_voc")
-
-    # download_and_extract_coco(coco_dir)
+def main(coco_dir, pascal_voc_dir):
+    """Download and extract datasets."""
+    download_and_extract_coco(coco_dir)
     download_and_extract_pascal_voc(pascal_voc_dir)
-
     print("Datasets downloaded and extracted successfully!")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Download and extract datasets.")
+    parser.add_argument(
+        "--coco_dir",
+        type=str,
+        default=os.path.join("data", "coco"),
+        help="Directory to download and extract COCO dataset. Default: 'data/coco'.",
+    )
+    parser.add_argument(
+        "--pascal_voc_dir",
+        type=str,
+        default=os.path.join("data", "pascal_voc"),
+        help="Directory to download and extract Pascal VOC dataset. Default: 'data/pascal_voc'.",
+    )
+
+    args = parser.parse_args()
+    main(coco_dir=args.coco_dir, pascal_voc_dir=args.pascal_voc_dir)

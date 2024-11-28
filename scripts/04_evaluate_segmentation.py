@@ -3,7 +3,8 @@ import sys
 import numpy as np
 import tensorflow as tf
 import argparse
-#import segmentation_models as sm
+
+# import segmentation_models as sm
 
 # Add the project root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -141,10 +142,7 @@ class COCOSegmentationEvaluator:
         return metrics
 
 
-
-def iou_metric(
-    y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 3
-) -> tf.Tensor:
+def iou_metric(y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 3) -> tf.Tensor:
     # Binarize predictions
     y_pred_bin = tf.cast(y_pred, tf.float32)
 
@@ -170,6 +168,7 @@ def iou_metric(
 
     return ious
 
+
 def evaluate_model(model, test_dataset, evaluator, num_classes=3):
     """
     Evaluate the model on test dataset and compute metrics per class
@@ -177,11 +176,11 @@ def evaluate_model(model, test_dataset, evaluator, num_classes=3):
     total_loss = 0
     class_ious = np.zeros(num_classes)  # Assuming 3 classes
     num_batches = 0
-    
+
     # Compile model with same loss and metrics as training
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-4),
-        loss=tf.keras.losses.CategoricalCrossentropy(), # it's wrong, but just to load the model
+        loss=tf.keras.losses.CategoricalCrossentropy(),  # it's wrong, but just to load the model
         metrics=[iou_metric],
     )
 
@@ -189,23 +188,24 @@ def evaluate_model(model, test_dataset, evaluator, num_classes=3):
     for x_batch, y_batch in test_dataset:
         # Get predictions
         y_pred = model.predict(x_batch, verbose=0)
-        
+
         # Get the index of the highest value in the last axis (channels)
         max_channel_indices = np.argmax(y_pred, axis=-1)  # Shape: (batch, height, width)
 
         # Create a one-hot encoded mask
-        y_pred_argmax = np.zeros_like(y_pred, dtype=np.uint8)  # Shape: (batch, height, width, channels)
+        y_pred_argmax = np.zeros_like(
+            y_pred, dtype=np.uint8
+        )  # Shape: (batch, height, width, channels)
 
         # Create meshgrid for all dimensions
         batch_size, height, width = max_channel_indices.shape
-        batch_idx, row_idx, col_idx = np.meshgrid(np.arange(batch_size),
-                                                np.arange(height),
-                                                np.arange(width),
-                                                indexing='ij')
+        batch_idx, row_idx, col_idx = np.meshgrid(
+            np.arange(batch_size), np.arange(height), np.arange(width), indexing="ij"
+        )
 
         # Set the appropriate indices to 1
         y_pred_argmax[batch_idx, row_idx, col_idx, max_channel_indices] = 1
-        
+
         # Compute IoU for each class
         batch_ious = iou_metric(y_batch, y_pred_argmax, num_classes=num_classes)
         class_ious += np.array(batch_ious)
@@ -222,73 +222,60 @@ def evaluate_model(model, test_dataset, evaluator, num_classes=3):
 
             # Update evaluator with this sample
             evaluator.update(y_i, y_pred_i)
-            
+
         num_batches += 1
-    
+
     metrics = evaluator.get_metrics()
 
     # Compute averages
     avg_loss = total_loss / num_batches
     avg_class_ious = class_ious / num_batches
     mean_iou = np.mean(avg_class_ious)
-    
+
     return {
-        'loss': float(avg_loss),
-        'mean_iou': float(mean_iou),
-        'coco_map': metrics['mAP'],
-        'coco_map50': metrics['mAP_50'],
-        'class_ious': avg_class_ious.tolist()
+        "loss": float(avg_loss),
+        "mean_iou": float(mean_iou),
+        "coco_map": metrics["mAP"],
+        "coco_map50": metrics["mAP_50"],
+        "class_ious": avg_class_ious.tolist(),
     }
+
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--data_path", 
-        default="/mnt/f/ssl_images/data", 
-        type=str, 
-        help="Dataset folder path"
+        "--data_path", default="/mnt/f/ssl_images/data", type=str, help="Dataset folder path"
     )
     parser.add_argument(
-        "--model_path",
-        required=True,
-        type=str,
-        help="Path to the trained model checkpoint"
+        "--model_path", required=True, type=str, help="Path to the trained model checkpoint"
     )
-    parser.add_argument(
-        "--single_channel",
-        action="store_true",
-        help="To use grayscale images"
-    )
-    parser.add_argument(
-        "--batch_size",
-        default=32,
-        type=int,
-        help="Batch size for evaluation"
-    )
+    parser.add_argument("--single_channel", action="store_true", help="To use grayscale images")
+    parser.add_argument("--batch_size", default=32, type=int, help="Batch size for evaluation")
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     import os
     import tensorflow as tf
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     # Set random seeds for reproducibility
     tf.random.set_seed(42)
     np.random.seed(42)
-    
+
     args = get_args()
     data_dir = os.path.join(args.data_path, "processed", "coco")
-    
+
     # Initialize model
     if args.single_channel:
         model = ResNet18((224, 224, 1), mode="segmentation")
     else:
         model = ResNet18((224, 224, 3), mode="segmentation")
-    
+
     # Load model weights
     print(f"Loading model from: {args.model_path}")
     model.load_weights(args.model_path)
-    
+
     # Create test dataset
     print("Loading test dataset...")
     test_dataset = create_dataset_segmentation(
@@ -298,9 +285,10 @@ if __name__ == "__main__":
         single_channel=args.single_channel,
     )
 
-    
     # Define the selected category IDs based on the list of classes to evaluate
-    annotations_path = os.path.join(args.data_path, 'coco', "annotations", f"instances_val2017.json")
+    annotations_path = os.path.join(
+        args.data_path, "coco", "annotations", f"instances_val2017.json"
+    )
     coco = COCO(annotations_path)
     selected_cat_ids = coco.getCatIds(
         catNms=[
@@ -309,16 +297,14 @@ if __name__ == "__main__":
             "chair",
         ]
     )
-    
+
     # Initialize evaluator with the selected categories
     evaluator = COCOSegmentationEvaluator(num_classes=3, selected_cat_ids=selected_cat_ids)
 
-
-    
     # Evaluate model
     print("Evaluating model...")
     results = evaluate_model(model, test_dataset, evaluator)
-    
+
     # Print results
     print("\nEvaluation Results:")
     print(f"Average Loss: {results['loss']:.4f}")
@@ -326,7 +312,7 @@ if __name__ == "__main__":
     print(f"COCO mAP: {results['coco_map']:.4f}")
     print(f"COCO mAP@IoU50: {results['coco_map50']:.4f}")
     print("IoU per class:")
-    for i, iou in enumerate(results['class_ious']):
+    for i, iou in enumerate(results["class_ious"]):
         print(f"  Class {i}: {iou:.4f}")
 
 """

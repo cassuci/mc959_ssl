@@ -78,7 +78,9 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
         # Save best model
         if logs.get("val_loss", float("inf")) < self.best_val_loss:
             self.best_val_loss = logs["val_loss"]
-            best_model_path = os.path.join(self.checkpoint_dir, "best_segmentation_model.weights.h5")
+            best_model_path = os.path.join(
+                self.checkpoint_dir, "best_segmentation_model.weights.h5"
+            )
             self.model.save_weights(best_model_path)
             # Save best validation loss
             np.save(os.path.join(self.checkpoint_dir, "best_val_loss.npy"), self.best_val_loss)
@@ -89,14 +91,20 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
         np.save(history_path, self.history)
 
 
-
-def train_model(model, train_dataset, val_dataset, epochs=10, initial_epoch=0, checkpoint_dir='segmentation_ckpt'):
+def train_model(
+    model,
+    train_dataset,
+    val_dataset,
+    epochs=10,
+    initial_epoch=0,
+    checkpoint_dir="segmentation_ckpt",
+):
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-4),
-        #loss=weighted_binary_cross_entropy(weights={0: 0.1, 1: 1.}, from_logits=False),
+        # loss=weighted_binary_cross_entropy(weights={0: 0.1, 1: 1.}, from_logits=False),
         # In *my* experiments for the baseline training, binary crossentroy *without* weights is the best loss
         loss=tf.keras.losses.BinaryCrossentropy(from_logits=False, label_smoothing=0.1),
-        #loss=tf.keras.losses.BinaryFocalCrossentropy(),
+        # loss=tf.keras.losses.BinaryFocalCrossentropy(),
         metrics=[
             tf.keras.metrics.BinaryAccuracy(),
             tf.keras.metrics.Precision(),
@@ -179,7 +187,7 @@ def get_args():
         type=str,
         help="Prefix to the saved model path",
     )
-    parser.add_argument('--classification_classes', nargs='+', default=[])
+    parser.add_argument("--classification_classes", nargs="+", default=[])
     return parser.parse_args()
 
 
@@ -206,14 +214,14 @@ if __name__ == "__main__":
         split_list_file=os.path.join(metadata_dir, "train.txt"),
         batch_size=32,
         single_channel=args.single_channel,
-        classes=args.classification_classes
+        classes=args.classification_classes,
     )
     val_dataset = create_dataset_classification(
         data_dir,
         split_list_file=os.path.join(metadata_dir, "val.txt"),
         batch_size=32,
         single_channel=args.single_channel,
-        classes=args.classification_classes
+        classes=args.classification_classes,
     )
 
     # Train the model
@@ -221,7 +229,9 @@ if __name__ == "__main__":
     if args.two_phases_train:
         trained_model, history = train_two_phases(model, train_dataset, val_dataset)
     else:
-        trained_model, history = train_model(model, train_dataset, val_dataset, epochs=20, checkpoint_dir=args.checkpoint_dir)
+        trained_model, history = train_model(
+            model, train_dataset, val_dataset, epochs=20, checkpoint_dir=args.checkpoint_dir
+        )
 
     # Save the model
     final_h5_path = os.path.join(args.checkpoint_dir, "final_classification_model.h5")

@@ -1,4 +1,5 @@
 import numpy as np
+import argparse
 import os
 import tensorflow as tf
 import tensorflow_io as tfio
@@ -364,25 +365,62 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_di
     return history
 
 
-if __name__ == "__main__":
-    # Set random seeds for reproducibility'
-    tf.random.set_seed(42)
-    np.random.seed(42)
-
-    # Set up paths
-    data_dir = os.path.join("/mnt/f/ssl_images/data", "processed", "coco", "colorization")
-    checkpoint_dir = os.path.join("models", "checkpoints")
+def main(data_dir, checkpoint_dir, save_path, epochs, batch_size, seed):
+    """Train a colorization model."""
+    # Set random seeds for reproducibility
+    tf.random.set_seed(seed)
+    np.random.seed(seed)
 
     # Initialize model
     model = ResNet50((224, 224, 1), mode="colorization")
 
     print("Training colorization model...")
     history = train_colorization(
-        data_dir, model, epochs=100, batch_size=16, checkpoint_dir=checkpoint_dir
+        data_dir, model, epochs=epochs, batch_size=batch_size, checkpoint_dir=checkpoint_dir
     )
 
     # Save the final model
-    save_path = os.path.join("models", "colorization_model_resnet50.h5")
     model.save_weights(save_path)
     print(f"Final model saved to {save_path}")
     print("Colorization training completed successfully!")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Train a colorization model.")
+    parser.add_argument(
+        "--data_dir",
+        type=str,
+        default=os.path.join("data", "processed", "coco", "colorization"),
+        help="Path to the training data. Default: 'data/processed/coco/colorization'.",
+    )
+    parser.add_argument(
+        "--checkpoint_dir",
+        type=str,
+        default=os.path.join("models", "checkpoints"),
+        help="Path to save training checkpoints. Default: 'models/checkpoints'.",
+    )
+    parser.add_argument(
+        "--save_path",
+        type=str,
+        default=os.path.join("models", "colorization_model_resnet18.keras"),
+        help="Path to save the final model. Default: 'models/colorization_model_resnet18.keras'.",
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=100, help="Number of training epochs. Default: 100."
+    )
+    parser.add_argument(
+        "--batch_size", type=int, default=16, help="Training batch size. Default: 16."
+    )
+    parser.add_argument(
+        "--seed", type=int, default=42, help="Random seed for reproducibility. Default: 42."
+    )
+
+    args = parser.parse_args()
+    main(
+        data_dir=args.data_dir,
+        checkpoint_dir=args.checkpoint_dir,
+        save_path=args.save_path,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        seed=args.seed,
+    )

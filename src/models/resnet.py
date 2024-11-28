@@ -121,7 +121,7 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification", num_c
 
 def load_encoder_weights(model, weights_path):
     """Load weights by name, so only layers with same name and shape will be loaded."""
-    model.load_weights(weights_path, skip_mismatch=True, by_name=True)
+    model.load_weights(weights_path, skip_mismatch=False, by_name=True)
 
 
 def ResNet18(input_shape=(224, 224, 3), mode="classification", num_classes=None):
