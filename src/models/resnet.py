@@ -63,7 +63,7 @@ def upsample_block(x, skip_connection, filters, name_prefix):
 
     x = tf.keras.layers.Conv2D(filters, 3, padding="same", name=f"{name_prefix}_conv2")(x)
     x = tf.keras.layers.BatchNormalization(name=f"{name_prefix}_bn2")(x)
-    x = tf.keras.layers.LeakyReLU(0.2, name=f'{name_prefix}_leaky_relu1')(2)
+    x = tf.keras.layers.LeakyReLU(0.2, name=f'{name_prefix}_leaky_relu2')(x)
 
     return x
 
@@ -141,7 +141,7 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification", num_c
 
         # Final output layers
         x = tf.keras.layers.Conv2D(8, 3, padding="same", name="pre_output_conv")(x)
-        x = tf.keras.layers.ReLU()(x)
+        x = tf.keras.layers.LeakyReLU(0.2)(x)
         outputs = tf.keras.layers.Conv2D(
             3, 3, padding="same", activation="sigmoid", name="output_conv"
         )(x)
