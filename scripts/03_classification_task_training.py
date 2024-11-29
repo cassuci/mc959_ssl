@@ -70,7 +70,7 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
         # Save periodic checkpoint
         if (epoch + 1) % self.save_freq == 0:
             checkpoint_path = os.path.join(
-                self.checkpoint_dir, f"segmentation_model_epoch_{epoch + 1:03d}.weights.h5"
+                self.checkpoint_dir, f"classification_model_epoch_{epoch + 1:03d}.weights.h5"
             )
             self.model.save_weights(checkpoint_path)
             print(f"\nSaved periodic checkpoint for epoch {epoch + 1}")
@@ -79,7 +79,7 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
         if logs.get("val_loss", float("inf")) < self.best_val_loss:
             self.best_val_loss = logs["val_loss"]
             best_model_path = os.path.join(
-                self.checkpoint_dir, "best_segmentation_model.weights.h5"
+                self.checkpoint_dir, "best_classification_model.weights.h5"
             )
             self.model.save_weights(best_model_path)
             # Save best validation loss

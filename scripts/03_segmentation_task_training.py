@@ -183,7 +183,7 @@ def train_model(
 
     # Segmentation models losses can be combined together by '+' and scaled by integer or float factor
     # set class weights for dice_loss (car: 1.; pedestrian: 2.; background: 0.5;)
-    class_weights = np.array([1.0, 1.0, 1.0, 0.1])
+    class_weights = np.array([1.0, 1.0, 1.0, 0.05])
     dice_loss = sm.losses.DiceLoss(class_weights=class_weights)
     focal_loss = sm.losses.CategoricalFocalLoss()
     total_loss = dice_loss + (1 * focal_loss)
@@ -203,6 +203,7 @@ def train_model(
         tf.keras.callbacks.ReduceLROnPlateau(
             monitor="val_loss", factor=0.5, patience=3, verbose=1, mode="auto"
         ),
+        TrainingProgressCallback(checkpoint_dir=checkpoint_dir, save_format='tf')
     ]
 
     # Train the model
