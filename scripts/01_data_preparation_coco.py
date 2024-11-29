@@ -29,9 +29,7 @@ def prepare_coco_data_colorization(data_dir, output_dir, num_samples=None):
     """Prepare COCO dataset for pretext tasks."""
     image_dir = os.path.join(data_dir, "train2017")
     annotations_dir = os.path.join(data_dir, "annotations")
-    output_dir_inpainting = os.path.join(output_dir, "coco", "inpainting")
     output_dir_colorization = os.path.join(output_dir, "coco", "colorization")
-    os.makedirs(output_dir_inpainting, exist_ok=True)
     os.makedirs(output_dir_colorization, exist_ok=True)
 
     image_files = [f for f in os.listdir(image_dir) if f.endswith(".jpg")]
