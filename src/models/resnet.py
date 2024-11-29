@@ -32,7 +32,7 @@ class ResNetBlock(tf.keras.Model):
         return self.relu(x + shortcut)
 
 
-def upsample_block(x, skip_connection, filters, name_prefix):
+def light_upsample_block(x, skip_connection, filters, name_prefix):
     # Bilinear upsampling followed by convolution
     x = tf.keras.layers.UpSampling2D(
         size=2, interpolation="bilinear", name=f"{name_prefix}_upsample"
@@ -46,6 +46,24 @@ def upsample_block(x, skip_connection, filters, name_prefix):
     x = tf.keras.layers.Conv2D(filters, 3, padding="same", name=f"{name_prefix}_conv1")(x)
     x = tf.keras.layers.BatchNormalization(name=f"{name_prefix}_bn1")(x)
     x = tf.keras.layers.LeakyReLU(0.2, name=f'{name_prefix}_leaky_relu')(x)
+
+    return x
+
+def upsample_block(x, skip_connection, filters, name_prefix):
+    x = tf.keras.layers.Conv2DTranspose(filters, 2, 2, activation="relu")(x)
+
+    # Concatenate skip connection
+    if skip_connection is not None:
+        x = tf.keras.layers.Concatenate(name=f"{name_prefix}_concat")([x, skip_connection])
+
+    # Two conv layers for better feature processing
+    x = tf.keras.layers.Conv2D(filters, 3, padding="same", name=f"{name_prefix}_conv1")(x)
+    x = tf.keras.layers.BatchNormalization(name=f"{name_prefix}_bn1")(x)
+    x = tf.keras.layers.LeakyReLU(0.2, name=f'{name_prefix}_leaky_relu1')(x)
+
+    x = tf.keras.layers.Conv2D(filters, 3, padding="same", name=f"{name_prefix}_conv2")(x)
+    x = tf.keras.layers.BatchNormalization(name=f"{name_prefix}_bn2")(x)
+    x = tf.keras.layers.LeakyReLU(0.2, name=f'{name_prefix}_leaky_relu1')(2)
 
     return x
 
@@ -90,7 +108,7 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification", num_c
 
         for i, filters in enumerate(decoder_filters):
             skip = skips[i] if i < len(skips) else None
-            x = upsample_block(x, skip, filters, f"decoder_seg_{i}")
+            x = light_upsample_block(x, skip, filters, f"decoder_seg_{i}")
 
         # Final output layer
         outputs = tf.keras.layers.Conv2D(4, 3, padding="same", activation="softmax", name="decoder_output_conv_seg")(
@@ -105,16 +123,28 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification", num_c
 
         for i, filters in enumerate(decoder_filters):
             skip = skips[i] if i < len(skips) else None
-            x = upsample_block(x, skip, filters, f"decoder_{i}")
+            x = light_upsample_block(x, skip, filters, f"decoder_{i}")
 
         # Final output layer
         outputs = tf.keras.layers.Conv2D(2, 3, padding="same", activation="sigmoid", name="decoder_output_conv")(
             x
         )
 
-    # TODO Inpainting decoder (not sure if it's the same as colorization, maybe output shape is different?)
     elif mode == 'inpainting':
-        raise NotImplementedError("Inpainting decoder is not implemented.")
+        # Decoder pathway with skip connections
+        skips = skip_connections[::-1]  # Reverse skip connections
+        decoder_filters = [256, 128, 64, 32, 16]
+
+        for i, filters in enumerate(decoder_filters):
+            skip = skips[i] if i < len(skips) else None
+            x = upsample_block(x, skip, filters, f"decoder_{i}")
+
+        # Final output layers
+        x = tf.keras.layers.Conv2D(8, 3, padding="same", name="pre_output_conv")(x)
+        x = tf.keras.layers.ReLU()(x)
+        outputs = tf.keras.layers.Conv2D(
+            3, 3, padding="same", activation="sigmoid", name="output_conv"
+        )(x)
 
     return tf.keras.Model(inputs, outputs, name=name)
 
