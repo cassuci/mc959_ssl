@@ -172,7 +172,7 @@ def train_two_phases(model, train_dataset, val_dataset, epochs=10):
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--data_path", default="/mnt/f/ssl_images/data", type=str, help="Dataset folder path"
+        "--data_path", default="data", type=str, help="Dataset folder path"
     )
     parser.add_argument(
         "--two_phases_train", action="store_true", help="Allow training in two phases"
@@ -187,7 +187,7 @@ def get_args():
         type=str,
         help="Prefix to the saved model path",
     )
-    parser.add_argument("--classification_classes", nargs="+", default=[])
+    parser.add_argument("--classification_classes", nargs="+", default=["person"])
     return parser.parse_args()
 
 

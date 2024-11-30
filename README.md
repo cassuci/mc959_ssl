@@ -11,22 +11,27 @@ self_supervised_learning_project/
 │   ├── pascal_voc/
 │   └── processed/
 ├── models/
-├── notebooks/
 ├── scripts/
 │   ├── 00_download_data.py
-│   ├── 01_data_preparation.py
-│   ├── 02_pretext_task_training.py
-│   ├── 03_supervised_training.py
-│   └── 04_evaluation.py
+│   ├── 01_data_preparation_coco.py
+│   ├── 01_data_preparation_pascalvoc.py
+│   ├── 02_coloring_task_training.py
+│   ├── 02_inpainting_task_training.py
+│   ├── 03_classification_task_training.py
+│   ├── 03_segmentation_task_training.py
+│   └── 04_evaluate_segmentation.py
 ├── src/
 │   ├── libs/
+│   │   ├── data_loading_pascal.py
+│   │   ├── data_loading.py
 │   │   ├── data_processing.py
+│   │   └── eval_segmentation.py
 │   │   └── visualization.py
 │   ├── models/
-│   │   ├── base_model.py
 │   │   └── resnet.py
 │   └── utils/
 │       └── metrics.py
+│       └── evaluation.py
 ├── tests/
 ├── requirements.txt
 └── README.md
@@ -36,8 +41,8 @@ self_supervised_learning_project/
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/self_supervised_learning_project.git
-   cd self_supervised_learning_project
+   git clone https://github.com/cassuci/mc959_ssl.git
+   cd mc959_ssl
    ```
 
 2. Create a virtual environment and activate it:
@@ -70,7 +75,16 @@ Follow these steps to run the project:
    ```
    This script preprocesses the data for both pretext and downstream tasks.
 
-3. Train on pretext tasks:
+3. Train the baseline models:
+   ```
+   python scripts/03_classification_task_training.py
+   ```
+   ```
+   python scripts/03_segmentation_task_training.py
+   ```
+   This trains the model on the classification and segmentation tasks, without pretrained weights.
+
+4. Train on pretext tasks:
    ```
    python scripts/02_inpainting_task_training.py
    ```
@@ -79,24 +93,24 @@ Follow these steps to run the project:
    ```
    This trains the model on inpainting and colorization tasks.
 
-4. Fine-tune on downstream task:
+5. Fine-tune on downstream task:
    ```
-   python scripts/03_classification_task_training.py
+   python scripts/03_classification_task_training.py --pretrained_model <path to model checkpoint>
    ```
    ```
-   python scripts/03_segmentation_task_training.py
+   python scripts/03_segmentation_task_training.py --pretrained_model <path to model checkpoint>
    ```
    This fine-tunes the pre-trained model on the classification and segmentation tasks.
 
-5. Evaluate the model:
+6. Evaluate the model:
    ```
-   python scripts/04_evaluation.py
+   python scripts/04_evaluate_segmenation.py --model_path <path to model checkpoint>
    ```
    This evaluates the fine-tuned model and generates performance metrics.
 
 ## Model Architecture
 
-The project uses a ResNet18 architecture for both pretext and downstream tasks. The model is implemented in `src/models/resnet.py` and extends the `BaseModel` class defined in `src/models/base_model.py`.
+The project uses a ResNet18 architecture for both pretext and downstream tasks. The model is implemented in `src/models/resnet.py`.
 
 ## Pretext Tasks
 
@@ -105,7 +119,8 @@ The project uses a ResNet18 architecture for both pretext and downstream tasks. 
 
 ## Downstream Task
 
-Image Classification: The pre-trained model is fine-tuned for multi-class image classification using the Pascal VOC dataset.
+1. Image Classification: The model is trained for binary image classification using the Pascal VOC dataset, for person detection.
+2. Image segmentation: The model is trained to segment objects from three classes (person, car and chair).
 
 ## Results
 

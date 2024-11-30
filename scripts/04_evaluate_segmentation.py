@@ -244,7 +244,7 @@ def evaluate_model(model, test_dataset, evaluator, num_classes=3):
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--data_path", default="/mnt/f/ssl_images/data", type=str, help="Dataset folder path"
+        "--data_path", default="data", type=str, help="Dataset folder path"
     )
     parser.add_argument(
         "--model_path", required=True, type=str, help="Path to the trained model checkpoint"

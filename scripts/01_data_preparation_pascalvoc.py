@@ -6,6 +6,7 @@ from tqdm import tqdm
 import xml.etree.ElementTree as ET
 from typing import Dict, List
 import random
+import argparse
 import cv2
 
 # Add the project root directory to the Python path
@@ -222,13 +223,27 @@ def prepare_pascal_voc_data(data_dir, output_dir, task="segmentation"):
 
 
 if __name__ == "__main__":
-    pascal_voc_dir = os.path.join("/mnt/f/ssl_images/data", "pascal_voc")
-    output_dir = os.path.join("/mnt/f/ssl_images/data", "processed")
+
+    parser = argparse.ArgumentParser(description="Prepare Pascal VOC dataset for various tasks.")
+    parser.add_argument(
+        "--pascal_voc_dir",
+        type=str,
+        default=os.path.join("data", "pascal_voc"),
+        help="Directory where the Pascal Voc dataset is stored. Default: 'data/pascal_voc'.",
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default=os.path.join("data", "processed"),
+        help="Directory to store the processed data. Default: 'data/processed'.",
+    )
+    args = parser.parse_args()
 
     # Prepare classification data
-    # prepare_pascal_voc_data(pascal_voc_dir, output_dir, task='classification')
+    prepare_pascal_voc_data(args.pascal_voc_dir, args.output_dir, task='classification')
 
     # Prepare segmentation data
-    prepare_pascal_voc_data(pascal_voc_dir, output_dir, task="segmentation")
+    # We discontinued the idea of using Pascal VOC for segmentation, so this is not used
+    #prepare_pascal_voc_data(args.pascal_voc_dir, args.output_dir, task="segmentation")
 
     print("Data preparation completed successfully!")
