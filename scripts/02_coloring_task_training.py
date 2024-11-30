@@ -396,8 +396,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--checkpoint_dir",
         type=str,
-        default=os.path.join("models", "checkpoints"),
-        help="Path to save training checkpoints. Default: 'models/checkpoints'.",
+        default=os.path.join("models", "coloring_ckpt"),
+        help="Path to save training checkpoints. Default: 'models/coloring_ckpt'.",
     )
     parser.add_argument(
         "--save_path",

@@ -166,7 +166,7 @@ def get_args():
         "-t", "--train_dir", default="./data/train2017", help="Train set folder path."
     )
     parser.add_argument(
-        "-s", "--save_weights_dir", default="./models/checkpoints", help="Folder to save weights."
+        "-s", "--save_weights_dir", default="models/inpainting_ckpt", help="Folder to save weights."
     )
 
     return parser.parse_args()

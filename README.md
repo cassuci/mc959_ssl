@@ -10,7 +10,13 @@ self_supervised_learning_project/
 │   ├── coco/
 │   ├── pascal_voc/
 │   └── processed/
-├── models/
+├── exploration/
+│   ├── coco_inpainting_inferences.ipynb
+│   ├── coco_segmentation_evaluation.ipynb
+│   ├── explore_coco_seg.ipynb
+│   ├── explore_pascal_voc.ipynb
+│   ├── pascal_classification_evaluation.ipynb
+│   └── test.ipynb
 ├── scripts/
 │   ├── 00_download_data.py
 │   ├── 01_data_preparation_coco.py
@@ -22,17 +28,16 @@ self_supervised_learning_project/
 │   └── 04_evaluate_segmentation.py
 ├── src/
 │   ├── libs/
-│   │   ├── data_loading_pascal.py
 │   │   ├── data_loading.py
 │   │   ├── data_processing.py
-│   │   └── eval_segmentation.py
+│   │   ├── eval_segmentation.py
 │   │   └── visualization.py
 │   ├── models/
 │   │   └── resnet.py
-│   └── utils/
-│       └── metrics.py
-│       └── evaluation.py
-├── tests/
+│   └── weights
+│       ├── load_weights.py
+│       └── weights.py
+├── Makefile
 ├── requirements.txt
 └── README.md
 ```
@@ -104,13 +109,17 @@ Follow these steps to run the project:
 
 6. Evaluate the model:
    ```
-   python scripts/04_evaluate_segmenation.py --model_path <path to model checkpoint>
+   python scripts/04_evaluate_segmentation.py --model_path <path to model checkpoint>
    ```
-   This evaluates the fine-tuned model and generates performance metrics.
+   This evaluates the model and generates performance metrics for the segmentation task. For the classification tasks, metrics are calculated and reported during training.
+
+7. Visualize results:
+
+   The Jupyter notebooks `exploration/coco_segmentation_evaluation.ipynb` and `exploration/pascal_classification_evaluation.ipynb` contain visual explorations of the results for both classification and segmentation tasks.
 
 ## Model Architecture
 
-The project uses a ResNet18 architecture for both pretext and downstream tasks. The model is implemented in `src/models/resnet.py`.
+The project uses UNet with a modified ResNet18 encoder for both pretext and downstream tasks. The model is implemented in `src/models/resnet.py`.
 
 ## Pretext Tasks
 
@@ -122,13 +131,10 @@ The project uses a ResNet18 architecture for both pretext and downstream tasks. 
 1. Image Classification: The model is trained for binary image classification using the Pascal VOC dataset, for person detection.
 2. Image segmentation: The model is trained to segment objects from three classes (person, car and chair).
 
-## Results
+## Datasets
 
-After running the evaluation script, you'll find the performance metrics printed in the console. These include accuracy, precision, recall, F1-score, and AUC-ROC for the classification task.
-
-## Visualization
-
-The project includes visualization tools in `src/libs/visualization.py`. These are used to plot training histories, feature maps, and to visualize the latent space of the trained model.
+1. COCO: The "Stuff 2017" portion of the COCO dataset is used for the inpainting, coloring and segmentation tasks.
+2. Pascal VOC: The "VOC2012 Challenge" data is used for the classification task.
 
 ## Contributing
 

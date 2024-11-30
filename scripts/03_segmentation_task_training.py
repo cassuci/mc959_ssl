@@ -386,7 +386,7 @@ def get_args():
     parser.add_argument("--single_channel", action="store_true", help="To use grayscale images")
     parser.add_argument(
         "--checkpoint_dir",
-        default="segmentation_ckpt",
+        default="models/segmentation_ckpt",
         type=str,
         help="Prefix to the saved model path",
     )
