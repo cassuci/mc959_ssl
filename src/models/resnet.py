@@ -3,6 +3,14 @@ import tensorflow as tf
 
 class ResNetBlock(tf.keras.Model):
     def __init__(self, filters, stride=1, name=None):
+        """
+        Creates a residual block for ResNet.
+
+        Args:
+            filters (int): Number of filters to be used in convolutional layer.
+            stride (int): Stride size for convolutional layer.
+            name (str): Name prefix for the layers in the block.
+        """
         super().__init__(name=name)
         self.conv1 = tf.keras.layers.Conv2D(
             filters, 3, strides=stride, padding="same", name=f"{name}_conv1"
@@ -23,6 +31,16 @@ class ResNetBlock(tf.keras.Model):
             self.shortcut = None
 
     def call(self, inputs, training=None):
+        """
+        Forward pass in the residual block.
+
+        Args:
+            inputs (tensorflow.Tensor): Tensor of inputs to be passed to the block.
+            training (bool): Whether or not to train batch normalization layers.
+
+        Returns:
+            tensorflow.Tensor: Block output tensor.
+        """
         x = self.conv1(inputs)
         x = self.bn1(x, training=training)
         x = self.relu(x)
@@ -33,6 +51,18 @@ class ResNetBlock(tf.keras.Model):
 
 
 def light_upsample_block(x, skip_connection, filters, name_prefix):
+    """
+    Light upsample block using UpSampling2D and one convolutional layer.
+
+    Args:
+        x (tensorflow.Tensor): Tensor of inputs to be passed to the block.
+        skip_connection (tensorflow.Tensor): Tensor to be used as skip connection.
+        filters (int): Number of filters in the convolutional layers.
+        name_prefix (str): Name prefix for the layers in the block.
+
+    Returns:
+        tensorflow.Tensor: Block output tensor.
+    """
     # Bilinear upsampling followed by convolution
     x = tf.keras.layers.UpSampling2D(
         size=2, interpolation="bilinear", name=f"{name_prefix}_upsample"
@@ -49,7 +79,20 @@ def light_upsample_block(x, skip_connection, filters, name_prefix):
 
     return x
 
+
 def upsample_block(x, skip_connection, filters, name_prefix):
+    """
+    Upsample block using UpSampling2D and tw convolutional layers.
+
+    Args:
+        x (tensorflow.Tensor): Tensor of inputs to be passed to the block.
+        skip_connection (tensorflow.Tensor): Tensor to be used as skip connection.
+        filters (int): Number of filters in the convolutional layers.
+        name_prefix (str): Name prefix for the layers in the block.
+
+    Returns:
+        tensorflow.Tensor: Block output tensor.
+    """
     x = tf.keras.layers.Conv2DTranspose(filters, 2, 2, activation="relu")(x)
 
     # Concatenate skip connection
@@ -69,6 +112,20 @@ def upsample_block(x, skip_connection, filters, name_prefix):
 
 
 def ResNet(input_shape, block_sizes, name="ResNet", mode="classification", num_classes=None):
+
+    """
+    Base ResNet model.
+
+    Args:
+        input_shape (list): Model input shape, in the format [h, w, c]
+        block_sizes (list): List of block sizes.
+        name (int): Model name. Defaulst to 'ResNet'.
+        mode (str): Name of the task. Can be 'classification', 'segmentation', 'colorization', 'inpainting'.
+        num_classes (int): Number of classes, if in classification mode.
+
+    Returns:
+        tensorflow.keras.Model: Created model for the given configuration
+    """
 
     assert mode in ['classification', 'segmentation', 'colorization', 'inpainting'], \
            "Invalid mode. Choose either 'classification', 'segmentation', 'colorization' or 'inpainting'."
@@ -96,9 +153,6 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification", num_c
 
     if mode == 'classification':
         x = tf.keras.layers.GlobalAveragePooling2D(name="avg_pool_cls")(x)
-        #x = tf.keras.layers.Flatten(name='flatten')(x)
-        #x = tf.keras.layers.Dense(500, activation='relu', name='cls_1')(x)
-        #x = tf.keras.layers.Dense(500, activation='relu', name='cls_2')(x)
         outputs = tf.keras.layers.Dense(num_classes, activation='sigmoid', name="predictions_cls")(x)
 
     elif mode == 'segmentation':
@@ -114,7 +168,6 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification", num_c
         outputs = tf.keras.layers.Conv2D(4, 3, padding="same", activation="softmax", name="decoder_output_conv_seg")(
             x
         )
-
 
     elif mode == 'colorization':
         # Decoder pathway with skip connections
@@ -150,17 +203,47 @@ def ResNet(input_shape, block_sizes, name="ResNet", mode="classification", num_c
 
 
 def load_encoder_weights(model, weights_path):
-    """Load weights by name, so only layers with same name and shape will be loaded."""
+    """
+    Load weights by name, so only layers with same name and shape will be loaded.
+
+    Args:
+        model (tensorflow.keras.Model): Model to be used when loading weights.
+        weights_path (str): Path to the saved weights to be loaded.
+    """
     model.load_weights(weights_path, skip_mismatch=False, by_name=True)
 
 
 def ResNet18(input_shape=(224, 224, 3), mode="classification", num_classes=None):
+    """
+    ResNet18 model.
+
+    Args:
+        input_shape (list): Model input shape, in the format [h, w, c].
+        mode (str): Name of the task. Can be 'classification', 'segmentation', 'colorization', 'inpainting'.
+        num_classes (int): Number of classes, if in classification mode.
+    """
     return ResNet(input_shape, [2, 2, 2, 2], name="ResNet18", mode=mode, num_classes=num_classes)
 
 
 def ResNet34(input_shape=(224, 224, 3), mode="classification", num_classes=None):
+    """
+    ResNet34 model.
+
+    Args:
+        input_shape (list): Model input shape, in the format [h, w, c].
+        mode (str): Name of the task. Can be 'classification', 'segmentation', 'colorization', 'inpainting'.
+        num_classes (int): Number of classes, if in classification mode.
+    """
     return ResNet(input_shape, [3, 4, 6, 3], name="ResNet34", mode=mode, num_classes=num_classes)
 
 
 def ResNet50(input_shape=(224, 224, 3), mode="classification", num_classes=None):
+    """
+    ResNet50 model.
+
+    Args:
+        input_shape (list): Model input shape, in the format [h, w, c].
+        mode (str): Name of the task. Can be 'classification', 'segmentation', 'colorization', 'inpainting'.
+        num_classes (int): Number of classes, if in classification mode.
+    """
     return ResNet(input_shape, [3, 4, 6, 3], name="ResNet50", mode=mode, num_classes=num_classes)

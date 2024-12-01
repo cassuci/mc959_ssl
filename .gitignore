@@ -87,3 +87,4 @@ config.ini
 secrets.yaml
 credentials.json
 *.key
+data/

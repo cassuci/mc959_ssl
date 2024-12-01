@@ -29,16 +29,26 @@ pascal_voc_classes = [
 ]
 
 def objects_to_labels(objects, classes=None):
-    """Transforms objects to int labels."""
-  
+    """
+    Converts a list of objects into a one-hot encoded label vector based on the provided classes.
+
+    Args:
+        objects (list): List of object names (strings) from an annotation file.
+        classes (list): List of class names to consider (defaults to PASCAL VOC classes).
+
+    Returns:
+        np.ndarray: One-hot encoded vector of shape [num_classes], where 1 indicates the presence of a class.
+    """  
     if not classes:
         classes = pascal_voc_classes
 
     # Assert all classes of interest are valid pascal voc classes
     assert all(class_name in pascal_voc_classes for class_name in classes)
 
+    # Create dict of label2int just with classes of interest
     label2int = {label: index for index, label in enumerate(classes)}
 
+    # Create one-hot encoded vector
     labels = np.zeros(len(classes))
     for obj in objects:
         if obj in classes:
@@ -47,7 +57,18 @@ def objects_to_labels(objects, classes=None):
 
 
 def parse_function_classification(filename, label, data_dir, single_channel=False):
-    """Load image from filename and average all 3 channels into a single channel."""
+    """
+    Loads and processes an image for classification.
+
+    Args:
+        filename (tf.Tensor): Tensor containing the filename of the image.
+        label (tf.Tensor): Tensor containing the label associated with the image.
+        data_dir (tf.Tensor): Tensor containing the base directory of the dataset.
+        single_channel (bool): Whether to convert the image to a single grayscale channel.
+
+    Returns:
+        tuple: Processed image and its associated label.
+    """
     # Load the image from file
     filename = filename.numpy().decode("utf-8")
     data_dir = data_dir.numpy().decode("utf-8")
@@ -59,7 +80,7 @@ def parse_function_classification(filename, label, data_dir, single_channel=Fals
         image_mean = np.dot(image[..., :3], [0.2989, 0.5870, 0.1140])
 
         # Expand dimensions to make it (height, width, 1)
-        image_mean = np.expand_dims(image_mean, axis=-1)  # Add a new axis for the single channel
+        image_mean = np.expand_dims(image_mean, axis=-1)
 
         return image_mean, label
 
@@ -67,7 +88,19 @@ def parse_function_classification(filename, label, data_dir, single_channel=Fals
 
 
 def load_classification_data(data_dir, split_list_file, single_channel=False, classes=None):
-    """Create a tf.data.Dataset for the classification task."""
+    """
+    Loads and prepares data for the classification task.
+
+    Args:
+        data_dir (str): Base directory of the dataset.
+        split_list_file (str): Path to the file containing image filenames for a specific split (train or val).
+        single_channel (bool): Whether to convert images to single-channel grayscale.
+        classes (list): List of class names to consider (defaults to PASCAL VOC classes).
+
+    Returns:
+        tf.data.Dataset: Dataset containing pairs of processed images and one-hot encoded labels.
+    """
+
     task_dir = os.path.join(data_dir, "classification")
 
     # Read data.json file containing image names and corresponding objects
@@ -78,7 +111,7 @@ def load_classification_data(data_dir, split_list_file, single_channel=False, cl
     with open(split_list_file) as file:
         split_files = [line.rstrip() for line in file]
 
-    # Create list of (filename, label) pairs
+    # Create list of filenames and labels
     filenames = []
     labels = []
     for filename in split_files:
@@ -87,7 +120,7 @@ def load_classification_data(data_dir, split_list_file, single_channel=False, cl
 
     labels = np.array(labels).astype(np.float32)
 
-    # Create a tf.data.Dataset from filenames and labels
+    # Create a tf.data.Dataset from filenames and labels pairs
     dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
     dataset = dataset.map(
         lambda filename, label: tf.py_function(
@@ -102,7 +135,19 @@ def load_classification_data(data_dir, split_list_file, single_channel=False, cl
 
 
 def create_dataset_classification(data_dir, split_list_file, batch_size, single_channel=False, classes=None):
-    """Load the data and prepare it as a batched tf.data.Dataset."""
+    """
+    Creates a batched and prefetched dataset for classification.
+
+    Args:
+        data_dir (str): Base directory of the dataset.
+        split_list_file (str): Path to the file containing image filenames for a specific split.
+        batch_size (int): Number of samples per batch.
+        single_channel (bool): Whether to convert images to single-channel grayscale.
+        classes (list): List of class names to consider (defaults to PASCAL VOC classes).
+
+    Returns:
+        tf.data.Dataset: Batched and prefetched dataset for classification.
+    """
     dataset = load_classification_data(data_dir, split_list_file, single_channel, classes)
     return dataset.shuffle(500).batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
@@ -111,7 +156,18 @@ def create_dataset_classification(data_dir, split_list_file, batch_size, single_
 
 
 def parse_function_segmentation(image_path, mask_path, single_channel):
-    """Load images and masks."""
+    """
+    Loads and processes an image and its corresponding mask for segmentation.
+
+    Args:
+        image_path (tf.Tensor): Tensor containing the file path of the input image.
+        mask_path (tf.Tensor): Tensor containing the file path of the corresponding mask.
+        single_channel (bool): Whether to convert the image to single-channel grayscale.
+
+    Returns:
+        tuple: Processed image and its corresponding mask.
+    """
+
     # Load the image from file
     image_path = image_path.numpy().decode("utf-8")
     mask_path = mask_path.numpy().decode("utf-8")
@@ -120,18 +176,25 @@ def parse_function_segmentation(image_path, mask_path, single_channel):
     mask = np.load(mask_path)
 
     if single_channel:
-        # Average the three channels
-        # image_mean = np.mean(image, axis=-1)  # Average across the last dimension (channels)
-        # image_mean = np.dot(image[..., :3], [0.2989, 0.5870, 0.1140])
-
         # Expand dimensions to make it (height, width, 1)
-        image = np.expand_dims(image, axis=-1)  # Add a new axis for the single channel
+        image = np.expand_dims(image, axis=-1)
 
     return image, mask
 
 
 def load_segmentation_data(data_dir, split="train", single_channel=False):
-    """Create a tf.data.Dataset for the segmentation task."""
+    """
+    Loads and prepares data for the segmentation task.
+
+    Args:
+        data_dir (str): Base directory of the dataset.
+        split (str): Dataset split to use ('train', 'val', or 'test').
+        single_channel (bool): Whether to convert images to single-channel grayscale.
+
+    Returns:
+        tf.data.Dataset: Dataset containing pairs of processed images and masks.
+    """
+
     task_dir = os.path.join(data_dir, "segmentation")
 
     assert split in ["train", "val", "test"], "Split should be train, val or test."
@@ -140,7 +203,7 @@ def load_segmentation_data(data_dir, split="train", single_channel=False):
     elif split == "test":
         split_dir = os.path.join(task_dir, "val2017")
 
-    # Create list of (filename, label) pairs
+    # Create lists of images and masks
     file_search_substr = "image"
     if single_channel:
         file_search_substr = "inputgray"
@@ -150,6 +213,7 @@ def load_segmentation_data(data_dir, split="train", single_channel=False):
         os.path.join(split_dir, filename.replace(file_search_substr, "mask")) for filename in files
     ]
 
+    # For train and val, split the original "train" split
     split_idx = int(0.8 * len(images))
     if split == "train":
         images = images[:split_idx]
@@ -158,7 +222,7 @@ def load_segmentation_data(data_dir, split="train", single_channel=False):
         images = images[split_idx:]
         masks = masks[split_idx:]
 
-    # Create a tf.data.Dataset from filenames and labels
+    # Create a tf.data.Dataset from images and masks
     dataset = tf.data.Dataset.from_tensor_slices((images, masks))
     dataset = dataset.map(
         lambda image, mask: tf.py_function(
@@ -173,6 +237,17 @@ def load_segmentation_data(data_dir, split="train", single_channel=False):
 
 
 def create_dataset_segmentation(data_dir, split, batch_size, single_channel=False):
-    """Load the data and prepare it as a batched tf.data.Dataset."""
+    """
+    Creates a batched and prefetched dataset for segmentation.
+
+    Args:
+        data_dir (str): Base directory of the dataset.
+        split (str): Dataset split to use ('train', 'val', or 'test').
+        batch_size (int): Number of samples per batch.
+        single_channel (bool): Whether to convert images to single-channel grayscale.
+
+    Returns:
+        tf.data.Dataset: Batched and prefetched dataset for segmentation.
+    """
     dataset = load_segmentation_data(data_dir, split, single_channel)
     return dataset.shuffle(500).batch(batch_size).prefetch(tf.data.AUTOTUNE)

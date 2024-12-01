@@ -18,6 +18,19 @@ from src.libs.data_loading import create_dataset_segmentation
 def iou_metric(
     y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 3, threshold: float = 0.5
 ) -> tf.Tensor:
+    """
+    Calculates the Intersection over Union (IoU) metric for multi-class segmentation.
+
+    Args:
+        y_true (tf.Tensor): Ground truth tensor with shape [batch, height, width, num_classes].
+        y_pred (tf.Tensor): Predicted tensor with shape [batch, height, width, num_classes].
+        num_classes (int): Number of classes in the segmentation task.
+        threshold (float): Threshold for binarizing predictions.
+
+    Returns:
+        tf.Tensor: Mean IoU across all classes and batches.
+    """
+
     # Binarize predictions
     y_pred_bin = tf.cast(y_pred > threshold, tf.float32)
 
@@ -32,7 +45,8 @@ def iou_metric(
         # Compute intersection and union
         intersection = tf.reduce_sum(
             y_true_class * y_pred_class, axis=(1, 2)
-        )  # Sum over spatial dimensions
+        )
+        # Sum over spatial dimensions
         union = (
             tf.reduce_sum(y_true_class, axis=(1, 2))
             + tf.reduce_sum(y_pred_class, axis=(1, 2))
@@ -44,22 +58,29 @@ def iou_metric(
         ious.append(iou)
 
     # Compute mean IoU over all classes
-    mean_iou = tf.reduce_mean(tf.stack(ious, axis=0), axis=0)  # Average over classes
+    mean_iou = tf.reduce_mean(tf.stack(ious, axis=0), axis=0)
 
-    return tf.reduce_mean(mean_iou)  # Average over batch
+    # Average over batch
+    return tf.reduce_mean(mean_iou)
 
 
 class TrainingProgressCallback(tf.keras.callbacks.Callback):
-    """Custom callback to track and save training progress with improved model saving."""
 
     def __init__(self, checkpoint_dir="models", save_freq=1, save_format="h5"):
         """
-        Initialize the callback with configurable save format.
+        Custom callback to track training progress, save periodic checkpoints, and save the best model.
 
         Args:
-            checkpoint_dir (str): Directory to save checkpoints
-            save_freq (int): Frequency of saving checkpoints (in epochs)
-            save_format (str): Format to save the model ('h5' or 'tf')
+            checkpoint_dir (str): Directory to save model checkpoints.
+            save_freq (int): Frequency of saving checkpoints (in epochs).
+            save_format (str): Format for saving the model ('h5' or 'tf').
+
+        Attributes:
+            checkpoint_dir (str): Path to save the checkpoints.
+            save_freq (int): Frequency of checkpoint saving.
+            save_format (str): Format for saving models ('h5' or 'tf').
+            best_val_loss (float): Best validation loss encountered during training.
+            history (dict): Tracks training and validation metrics.
         """
         super().__init__()
         self.checkpoint_dir = checkpoint_dir
@@ -72,8 +93,14 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
         self.history = self._load_history()
         self.best_val_loss = self._load_best_val_loss()
 
+
     def _load_history(self):
-        """Load training history from file if it exists."""
+        """
+        Loads the training history from a file if it exists, otherwise initializes an empty history.
+
+        Returns:
+            dict: Training history containing loss, metrics, and learning rate logs.
+        """
         history_path = os.path.join(self.checkpoint_dir, "training_history.npy")
         if os.path.exists(history_path):
             try:
@@ -82,19 +109,37 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
                 return self._initialize_history()
         return self._initialize_history()
 
+
     def _load_best_val_loss(self):
-        """Load best validation loss from file if it exists."""
+        """
+        Loads the best validation loss from a file if it exists, otherwise initializes it to infinity.
+
+        Returns:
+            float: The best validation loss encountered so far.
+        """
         best_loss_path = os.path.join(self.checkpoint_dir, "best_val_loss.npy")
         if os.path.exists(best_loss_path):
             return float(np.load(best_loss_path))
         return float("inf")
 
+
     def _initialize_history(self):
-        """Initialize empty history dictionary."""
+        """
+        Initializes an empty dictionary to track loss, validation loss, IoU metrics, and learning rate.
+
+        Returns:
+            dict: Empty training history dictionary with predefined keys.
+        """
         return {"loss": [], "val_loss": [], "iou_metric": [], "val_iou_metric": [], "lr": []}
 
+
     def _save_model(self, filepath):
-        """Save model with proper configuration."""
+        """
+        Saves the model in the specified format (HDF5 or TensorFlow SavedModel).
+
+        Args:
+            filepath (str): Path where the model will be saved.
+        """
         if self.save_format == "h5":
             # Save as HDF5 format
             self.model.save(filepath, save_format="h5")
@@ -102,8 +147,18 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
             # Save in TensorFlow SavedModel format
             self.model.save(filepath, save_format="tf")
 
+
     def on_epoch_end(self, epoch, logs=None):
-        """Handle end of epoch operations including model saving."""
+        """
+        Handles operations at the end of each training epoch, including:
+            - Updating training history.
+            - Saving periodic model checkpoints.
+            - Saving the best model based on validation loss.
+
+        Args:
+            epoch (int): Current epoch number.
+            logs (dict): Dictionary containing training and validation metrics.
+        """
         logs = logs or {}
 
         # Update history
@@ -153,6 +208,22 @@ def train_model(
     checkpoint_dir="models",
     load_latest_checkpoint=True,
 ):
+    """
+    Trains the segmentation model with specified datasets, loss function, and callbacks.
+
+    Args:
+        model (tf.keras.Model): Segmentation model to train.
+        train_dataset (tf.data.Dataset): Dataset for training.
+        val_dataset (tf.data.Dataset): Dataset for validation.
+        epochs (int): Total number of epochs to train.
+        initial_epoch (int): Epoch to start training from (useful for checkpoint resumption).
+        checkpoint_dir (str): Directory for saving checkpoints and history.
+        load_latest_checkpoint (bool): Whether to load the latest checkpoint before training.
+
+    Returns:
+        tuple: Trained model and training history.
+    """
+
     # Ensure checkpoint directory exists
     os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -181,21 +252,14 @@ def train_model(
                 print("Starting training from scratch...")
                 initial_epoch = 0
 
-    # Segmentation models losses can be combined together by '+' and scaled by integer or float factor
-    # set class weights for dice_loss (car: 1.; pedestrian: 2.; background: 0.5;)
-    class_weights = np.array([1.0, 1.0, 1.0, 0.05])
-    dice_loss = sm.losses.DiceLoss(class_weights=class_weights)
-    focal_loss = sm.losses.CategoricalFocalLoss()
-    total_loss = dice_loss + (1 * focal_loss)
-
     # Compile the model
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-4),
-        loss=total_loss,
-        # loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),
+        loss=get_segmentation_loss(),
         metrics=[iou_metric],
     )
 
+    # Define training callbacks
     callbacks = [
         tf.keras.callbacks.EarlyStopping(
             monitor="val_loss", min_delta=0, patience=5, verbose=1, mode="auto"
@@ -220,6 +284,12 @@ def train_model(
 
 
 def get_segmentation_loss():
+    """
+    Creates and returns the total segmentation loss function by combining Dice loss and Focal loss.
+
+    Returns:
+        loss: Combined Dice and Focal loss function for segmentation tasks.
+    """
     class_weights = np.array([1, 1, 1, 0.05])
     dice_loss = sm.losses.DiceLoss(class_weights=class_weights)
     focal_loss = sm.losses.CategoricalFocalLoss()
@@ -227,15 +297,40 @@ def get_segmentation_loss():
     return total_loss
 
 
-# Modified feature monitoring to handle dynamic shapes
 class FeatureMonitorCallback(tf.keras.callbacks.Callback):
     def __init__(self, reference_model, monitor_layers):
+        """
+        Custom callback to monitor feature extraction layers and detect feature drift during training.
+
+        Args:
+            reference_model (tf.keras.Model): Model used as a reference for comparison.
+            monitor_layers (list): List of layer names to monitor for feature drift.
+
+        Attributes:
+            reference_model (tf.keras.Model): Reference model for feature comparison.
+            monitor_layers (list): Layers to monitor during training.
+            feature_distances (dict): Tracks cosine similarity distance for monitored layers.
+        """
         super().__init__()
         self.reference_model = reference_model
         self.monitor_layers = monitor_layers
         self.feature_distances = {layer: [] for layer in monitor_layers}
 
     def on_epoch_end(self, epoch, logs=None):
+        """
+        Monitors feature drift at the end of each epoch by comparing features from specific layers 
+        of the current model and the reference model.
+
+        Steps:
+            - Extracts a batch of data from the validation dataset.
+            - Compares the cosine similarity between features of monitored layers.
+            - Records the similarity distances and warns if drift exceeds a threshold.
+
+        Args:
+            epoch (int): Current epoch number.
+            logs (dict): Training and validation metrics for the epoch (optional).
+        """
+
         try:
             # Get a batch of data
             for x_batch, _ in val_dataset.take(1):
@@ -271,8 +366,19 @@ class FeatureMonitorCallback(tf.keras.callbacks.Callback):
 
 
 def train_gradual_unfreeze(model, train_dataset, val_dataset, epochs=30, checkpoint_dir="models"):
-    """Train with gradual unfreezing strategy, optimized for ResNet + skip connections."""
+    """
+    Trains the segmentation model using a gradual unfreezing strategy for better fine-tuning.
 
+    Args:
+        model (tf.keras.Model): Segmentation model to train.
+        train_dataset (tf.data.Dataset): Dataset for training.
+        val_dataset (tf.data.Dataset): Dataset for validation.
+        epochs (int): Total number of epochs for training across all phases.
+        checkpoint_dir (str): Directory for saving model checkpoints.
+
+    Returns:
+        tuple: Trained model and combined training history across all phases.
+    """
     # Create callbacks that will be used in all phases
     base_callbacks = [
         tf.keras.callbacks.ReduceLROnPlateau(
@@ -375,6 +481,12 @@ def train_gradual_unfreeze(model, train_dataset, val_dataset, epochs=30, checkpo
 
 
 def get_args():
+    """
+    Parses command-line arguments for the segmentation training script.
+
+    Returns:
+        argparse.Namespace: Parsed arguments including paths and training settings.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", default="data", type=str, help="Dataset folder path")
     parser.add_argument(
@@ -394,6 +506,17 @@ def get_args():
 
 
 if __name__ == "__main__":
+    """
+    Main function for training a segmentation model.
+    
+    Steps:
+        1. Parse command-line arguments.
+        2. Initialize the model.
+        3. Load datasets for training and validation.
+        4. Train the model with specified settings.
+        5. Save the trained model.
+    """
+
     # Set random seeds for reproducibility
     tf.random.set_seed(42)
     np.random.seed(42)
@@ -404,17 +527,19 @@ if __name__ == "__main__":
     # Create checkpoint directory if not exists
     os.makedirs(args.checkpoint_dir, exist_ok=True)
 
+    # Initialize the model
     if args.single_channel:
         model = ResNet18((224, 224, 1), mode="segmentation")
     else:
         model = ResNet18((224, 224, 3), mode="segmentation")
     print(model.summary())
 
+    # Load pretrained weights if specified
     if args.pretrained_model:
         print("Loading model weights...")
         load_encoder_weights(model, args.pretrained_model)
 
-    # Load data and create dataset
+    # Create train and val datasets
     print("Loading data and creating dataset...")
     train_dataset = create_dataset_segmentation(
         data_dir,
