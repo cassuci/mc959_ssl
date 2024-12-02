@@ -30,8 +30,6 @@ self_supervised_learning_project/
 │   ├── libs/
 │   │   ├── data_loading.py
 │   │   ├── data_processing.py
-│   │   ├── eval_segmentation.py
-│   │   └── visualization.py
 │   ├── models/
 │   │   └── resnet.py
 │   └── weights
