@@ -177,6 +177,9 @@ def parse_function_segmentation(image_path, mask_path, single_channel):
 
     image = np.load(image_path)
     mask = np.load(mask_path)
+
+    if single_channel:
+        image = np.expand_dims(image, axis=-1)
     
     # Ensure correct dtype
     image = image.astype(np.float32)
