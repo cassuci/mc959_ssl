@@ -6,26 +6,9 @@ import tensorflow as tf
 # <------- Classification data loader functions ------->
 
 pascal_voc_classes = [
-    "person",
-    "bird",
-    "cat",
-    "cow",
-    "dog",
-    "horse",
-    "sheep",
-    "aeroplane",
-    "bicycle",
-    "boat",
-    "bus",
-    "car",
-    "motorbike",
-    "train",
-    "bottle",
-    "chair",
-    "diningtable",
-    "pottedplant",
-    "sofa",
-    "tvmonitor",
+    "person", "bird", "cat", "cow", "dog", "horse", "sheep",
+    "aeroplane", "bicycle", "boat", "bus", "car", "motorbike", "train",
+    "bottle", "chair", "diningtable", "pottedplant", "sofa", "tvmonitor",
 ]
 
 def objects_to_labels(objects, classes=None):
@@ -75,15 +58,17 @@ def parse_function_classification(filename, label, data_dir, single_channel=Fals
     image = np.load(os.path.join(data_dir, "classification", f"{filename}.npy"))
 
     if single_channel:
-        # Average the three channels
-        # image_mean = np.mean(image, axis=-1)  # Average across the last dimension (channels)
+        # Average the three channels using luminosity method
         image_mean = np.dot(image[..., :3], [0.2989, 0.5870, 0.1140])
-
         # Expand dimensions to make it (height, width, 1)
         image_mean = np.expand_dims(image_mean, axis=-1)
-
+        
+        # Ensure shape is (224, 224, 1)
+        image_mean = image_mean.astype(np.float32)
         return image_mean, label
 
+    # Ensure shape is (224, 224, 3)
+    image = image.astype(np.float32)
     return image, label
 
 
@@ -122,12 +107,25 @@ def load_classification_data(data_dir, split_list_file, single_channel=False, cl
 
     # Create a tf.data.Dataset from filenames and labels pairs
     dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
-    dataset = dataset.map(
-        lambda filename, label: tf.py_function(
+    
+    # Map function with explicit shape inference
+    def map_func(filename, label):
+        image, label = tf.py_function(
             func=parse_function_classification,
             inp=[filename, label, data_dir, single_channel],
             Tout=(tf.float32, tf.float32),
-        ),
+        )
+        
+        # Set explicit shapes based on single_channel flag
+        if single_channel:
+            image.set_shape([224, 224, 1])
+        else:
+            image.set_shape([224, 224, 3])
+        
+        return image, label
+
+    dataset = dataset.map(
+        map_func,
         num_parallel_calls=tf.data.AUTOTUNE,
     )
 
@@ -149,7 +147,12 @@ def create_dataset_classification(data_dir, split_list_file, batch_size, single_
         tf.data.Dataset: Batched and prefetched dataset for classification.
     """
     dataset = load_classification_data(data_dir, split_list_file, single_channel, classes)
-    return dataset.shuffle(500).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    
+    # Batch with known shape
+    if single_channel:
+        return dataset.shuffle(500).batch(batch_size, drop_remainder=True).prefetch(tf.data.AUTOTUNE)
+    else:
+        return dataset.shuffle(500).batch(batch_size, drop_remainder=True).prefetch(tf.data.AUTOTUNE)
 
 
 # <------- Segmentation data loader functions ------->
@@ -176,8 +179,12 @@ def parse_function_segmentation(image_path, mask_path, single_channel):
     mask = np.load(mask_path)
 
     if single_channel:
-        # Expand dimensions to make it (height, width, 1)
-        image = np.expand_dims(image, axis=-1)
+        # Expand dimensions of image to make it (height, width, 1)
+        image = np.expand_dims(image[..., :1], axis=-1)
+    
+    # Ensure correct dtype
+    image = image.astype(np.float32)
+    mask = mask.astype(np.float32)
 
     return image, mask
 
@@ -224,12 +231,30 @@ def load_segmentation_data(data_dir, split="train", single_channel=False):
 
     # Create a tf.data.Dataset from images and masks
     dataset = tf.data.Dataset.from_tensor_slices((images, masks))
-    dataset = dataset.map(
-        lambda image, mask: tf.py_function(
+    
+    # Map function with explicit shape inference
+    def map_func(image, mask):
+        image, mask = tf.py_function(
             func=parse_function_segmentation,
             inp=[image, mask, single_channel],
             Tout=(tf.float32, tf.float32),
-        ),
+        )
+        
+        # Set explicit shapes 
+        if single_channel:
+            # Single channel image is 224x224x1
+            image.set_shape([224, 224, 1])
+        else:
+            # Color image is 224x224x3 or 224x224x4
+            image.set_shape([224, 224, None])
+        
+        # Segmentation mask
+        mask.set_shape([224, 224, 4])
+        
+        return image, mask
+
+    dataset = dataset.map(
+        map_func,
         num_parallel_calls=tf.data.AUTOTUNE,
     )
 
@@ -250,4 +275,4 @@ def create_dataset_segmentation(data_dir, split, batch_size, single_channel=Fals
         tf.data.Dataset: Batched and prefetched dataset for segmentation.
     """
     dataset = load_segmentation_data(data_dir, split, single_channel)
-    return dataset.shuffle(500).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    return dataset.shuffle(500).batch(batch_size, drop_remainder=True).prefetch(tf.data.AUTOTUNE)
