@@ -177,10 +177,6 @@ def parse_function_segmentation(image_path, mask_path, single_channel):
 
     image = np.load(image_path)
     mask = np.load(mask_path)
-
-    if single_channel:
-        # Expand dimensions of image to make it (height, width, 1)
-        image = np.expand_dims(image[..., :1], axis=-1)
     
     # Ensure correct dtype
     image = image.astype(np.float32)
@@ -246,7 +242,7 @@ def load_segmentation_data(data_dir, split="train", single_channel=False):
             image.set_shape([224, 224, 1])
         else:
             # Color image is 224x224x3 or 224x224x4
-            image.set_shape([224, 224, None])
+            image.set_shape([224, 224, 3])
         
         # Segmentation mask
         mask.set_shape([224, 224, 4])
