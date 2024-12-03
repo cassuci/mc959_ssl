@@ -318,7 +318,7 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_di
     print("=" * 50, "\n")
 
     # Initialize loss function with weights
-    loss_fn = ColorizationLoss(vgg_weight=0.5, l1_weight=1.0)
+    loss_fn = ColorizationLoss(vgg_weight=float(1e-7), l1_weight=1.0)
 
     # Custom metric for monitoring L1 loss only
     def l1_metric(y_true, y_pred):
