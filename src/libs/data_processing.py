@@ -1,10 +1,6 @@
 import numpy as np
+import cv2
 from PIL import Image
-import tensorflow as tf
-
-import numpy as np
-import cv2  # OpenCV for resizing
-
 
 def load_image(image_path):
     """
@@ -21,21 +17,25 @@ def load_image(image_path):
 
 def resize_image(image, size=(224, 224)):
     """
-    Resize an image to a given size while keeping the number of channels (arbitrary channels).
+    Resize an image to a given size while keeping the number of channels.
 
     Args:
-        image (numpy.array): Image to be resized.
+        image (PIL.Image or numpy.ndarray): Image to be resized.
         size (tuple): Height and width to be used for resizing. Defaults to (224, 224).
 
     Returns:
-        numpy.array: Resized image.
+        numpy.ndarray: Resized image.
     """
-    # Check if the image has more than 1 channel
-    if image.ndim == 3:  # Multi-channel image (e.g., RGB, arbitrary channels)
-        # Resize the image with cv2.resize to match the new size
-        resized_image = cv2.resize(image, size, interpolation=cv2.INTER_LINEAR)
-    else:  # Single-channel image (grayscale)
-        resized_image = cv2.resize(image, size, interpolation=cv2.INTER_LINEAR)
+    # Convert PIL Image to numpy array if needed
+    if isinstance(image, Image.Image):
+        image = np.array(image)
+    
+    # Ensure the image is a numpy array
+    if not isinstance(image, np.ndarray):
+        raise TypeError(f"Expected PIL.Image or numpy.ndarray, got {type(image)}")
+    
+    # Resize the image
+    resized_image = cv2.resize(image, size, interpolation=cv2.INTER_LINEAR)
 
     return resized_image
 
@@ -45,12 +45,16 @@ def normalize_image(image):
     Normalize image values to range [0, 1].
 
     Args:
-        image (numpy.array): Image to be normalized.
+        image (PIL.Image or numpy.ndarray): Image to be normalized.
 
     Returns:
-        numpy.array: Normalized image.
+        numpy.ndarray: Normalized image.
     """
-    return np.array(image).astype(np.float32) / 255.0
+    # Convert PIL Image to numpy array if needed
+    if isinstance(image, Image.Image):
+        image = np.array(image)
+    
+    return image.astype(np.float32) / 255.0
 
 
 def resize_normalize(image):
@@ -58,12 +62,14 @@ def resize_normalize(image):
     Resize and normalize image
 
     Args:
-        image (numpy.array): Image to be resized and normalized.
+        image (PIL.Image or numpy.ndarray): Image to be resized and normalized.
 
     Returns:
-        numpy.array: Resized and normalized image.
+        numpy.ndarray: Resized and normalized image.
     """
-    return resize_image(normalize_image(image))
+    # First normalize, then resize to ensure consistent processing
+    normalized_image = normalize_image(image)
+    return resize_image(normalized_image)
 
 
 def is_color_image(image):
@@ -71,12 +77,17 @@ def is_color_image(image):
     Check if the image has three channels (RGB).
 
     Args:
-        image (numpy.array): Input image.
+        image (PIL.Image or numpy.ndarray): Input image.
 
     Returns:
         bool: True if it's a colored image.
     """
-    return image.ndim == 3 and image.shape[2] == 3
+    # Convert PIL Image to numpy array if needed
+    if isinstance(image, Image.Image):
+        image = np.array(image)
+    
+    # Check dimensionality and number of channels
+    return len(image.shape) == 3 and image.shape[2] == 3
 
 
 def create_colorization_task(image):
