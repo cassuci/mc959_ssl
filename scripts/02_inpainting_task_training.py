@@ -14,6 +14,15 @@ from src.weights.weights import weights_collection
 
 
 def generate_coco_dataset_descriptor(dataset_path: str) -> dict:
+    """
+    Generate a dataset descriptor for COCO dataset.
+    
+    Args:
+        dataset_path (str): COCO dataset folder path.
+    
+    Returns:
+        dict: A dictionary containing the path of training and validation images.
+    """
     descriptor = {}
 
     # Train and validation split
@@ -21,7 +30,6 @@ def generate_coco_dataset_descriptor(dataset_path: str) -> dict:
     train_samples = [
         os.path.join(train_path, f) for f in os.listdir(train_path)[:30000] if f.endswith(".jpg")
     ]
-
     total_samples = len(train_samples)
     train_size = int(0.8 * total_samples)
     indices = np.random.RandomState(42).permutation(total_samples)
@@ -35,6 +43,17 @@ def generate_coco_dataset_descriptor(dataset_path: str) -> dict:
 def create_mask(
     mask: tf.Tensor, input_shape: Tuple = (224, 224), mask_size: Tuple = (32, 32)
 ) -> tf.Tensor:
+    """
+    Create a random mask on the input tensor.
+    
+    Args:
+        mask (tf.Tensor): Initial mask tensor.
+        input_shape (Tuple): Shape of the input image.
+        mask_size (Tuple): Size of the mask patches.
+    
+    Returns:
+        tf.Tensor: Updated mask tensor with zeroed-out patches.
+    """
     x_mask = tf.random.uniform((), 0, input_shape[0] - mask_size[0], dtype=tf.int32)
     y_mask = tf.random.uniform((), 0, input_shape[1] - mask_size[1], dtype=tf.int32)
     mask = tf.concat(
@@ -56,6 +75,9 @@ def create_mask(
 
 
 class InpaintingDataLoader(metaclass=ABCMeta):
+    """
+    Data loader for inpainting task.
+    """
     def __init__(
         self,
         epochs: int,
@@ -73,6 +95,15 @@ class InpaintingDataLoader(metaclass=ABCMeta):
         self.shuffle_buffer_size = shuffle_buffer_size
 
     def _read_decode_resize(self, images_path: str) -> tf.Tensor:
+        """
+        Read, decode, and resize an image.
+        
+        Args:
+            images_path (str): Image path.
+        
+        Returns:
+            tf.Tensor: Resized image tensor.
+        """
         gt_image = tf.io.read_file(images_path)
         gt_image = tf.io.decode_jpeg(gt_image, channels=3)
         # resize image
@@ -81,6 +112,15 @@ class InpaintingDataLoader(metaclass=ABCMeta):
         return gt_image
 
     def _produce_mask(self, gt_image: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
+        """
+        Generate a pseudo-label by applying five random masks to the input image.
+        
+        Args:
+            gt_image (tf.Tensor): Ground truth image tensor.
+        
+        Returns:
+            Tuple[tf.Tensor, tf.Tensor]: normalized masked image and ground truth image.
+        """
         # CREATE MASK
         mask = tf.fill(self.input_shape, 255)
         # Patch 1
@@ -106,6 +146,15 @@ class InpaintingDataLoader(metaclass=ABCMeta):
         return masked_image, gt_image
 
     def get_data_loader(self, subset_name: str) -> tf.data.Dataset:
+        """
+        Create a data loader for a specified set.
+        
+        Args:
+            subset_name (str): 'train' or 'validation'.
+        
+        Returns:
+            tf.data.Dataset: Dataset object with applied preprocessing.
+        """
         if subset_name == "train":
             image_paths = self.dataset_descriptor["train"]
         else:
@@ -127,6 +176,9 @@ class InpaintingDataLoader(metaclass=ABCMeta):
 
 
 class PerceptualLoss(tf.keras.losses.Loss):
+    """
+    Custom perceptual loss using a pre-trained VGG19 model.
+    """
     def __init__(self):
         super().__init__()
         vgg = tf.keras.applications.VGG19(include_top=False, weights="imagenet")
@@ -142,6 +194,16 @@ class PerceptualLoss(tf.keras.losses.Loss):
         self.vgg_model = tf.keras.Model([vgg.input], outputs)
 
     def call(self, y_true, y_pred):
+        """
+        Compute the perceptual loss.
+        
+        Args:
+            y_true (tf.Tensor): Ground truth image tensor.
+            y_pred (tf.Tensor): Predicted image tensor.
+        
+        Returns:
+            tf.Tensor: Perceptual loss value.
+        """
         y_true_vgg = tf.keras.applications.vgg19.preprocess_input(y_true * 255.0)
         y_pred_vgg = tf.keras.applications.vgg19.preprocess_input(y_pred * 255.0)
 
@@ -156,6 +218,12 @@ class PerceptualLoss(tf.keras.losses.Loss):
 
 
 def get_args():
+    """
+    Parse command-line arguments.
+    
+    Returns:
+        argparse.Namespace: Parsed arguments.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-e", "--epochs", default=100, type=int, help="Number of epochs to train the model."
@@ -173,24 +241,34 @@ def get_args():
 
 
 if __name__ == "__main__":
+    # Parse command-line arguments for training configuration.
     args = get_args()
-
+    
+    # Create the directory to save model weights if it does not exist.
     os.makedirs(args.save_weights_dir, exist_ok=False)
 
+    # Generate a descriptor for the dataset, splitting it into training and validation subsets.
     dataset_descriptor = generate_coco_dataset_descriptor(args.train_dir)
 
+    # Initialize the data loader for the inpainting task with specified parameters.
     inpaint_dataloader = InpaintingDataLoader(args.epochs, args.batch_size, dataset_descriptor)
 
+    # Retrieve the data loader for the training and validation subsets.
     train_dataloader = inpaint_dataloader.get_data_loader("train")
     validation_dataloader = inpaint_dataloader.get_data_loader("validation")
-
+    
+    # Instantiate the custom perceptual loss function using a pre-trained VGG19 model.
     loss_fn = PerceptualLoss()
+    
+    # Initialize the ResNet18 model configured for the inpainting task.
     model = ResNet18(mode="inpainting")
+    
+    # Load pre-trained weights for the ResNet18 no-top model from a predefined collection.
     model = load_model_weights(weights_collection, model, 1000, False, "resnet18")
 
     model.summary()
 
-    # Add callbacks
+    # Define a list of callbacks to be used during training for monitoring and optimizing the process.
     _callbacks = [
         tf.keras.callbacks.EarlyStopping(
             monitor="val_loss", patience=15, restore_best_weights=True
@@ -210,12 +288,14 @@ if __name__ == "__main__":
     ]
     callbacks = tf.keras.callbacks.CallbackList(_callbacks, add_history=True, model=model)
 
-    # Compile model with custom loss
+    # Compile the model, specifying the optimizer, custom loss function, and evaluation metrics.
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=args.learning_rate),
         loss=loss_fn,
         metrics=["mae", "mse"],
     )
+    
+    # Train the model using the training and validation data loaders, applying the specified callbacks.
     model.fit(
         train_dataloader,
         validation_data=validation_dataloader,
