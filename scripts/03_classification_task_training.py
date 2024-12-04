@@ -288,14 +288,14 @@ if __name__ == "__main__":
     print("Loading data and creating dataset...")
     train_dataset = create_dataset_classification(
         data_dir,
-        split_list_file=os.path.join(metadata_dir, "train.txt"),
+        split_name='train',
         batch_size=32,
         single_channel=args.single_channel,
         classes=args.classification_classes,
     )
     val_dataset = create_dataset_classification(
         data_dir,
-        split_list_file=os.path.join(metadata_dir, "val.txt"),
+        split_name='val',
         batch_size=32,
         single_channel=args.single_channel,
         classes=args.classification_classes,

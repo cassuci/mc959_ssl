@@ -72,13 +72,13 @@ def parse_function_classification(filename, label, data_dir, single_channel=Fals
     return image, label
 
 
-def load_classification_data(data_dir, split_list_file, single_channel=False, classes=None):
+def load_classification_data(data_dir, split_name='train', single_channel=False, classes=None):
     """
     Loads and prepares data for the classification task.
 
     Args:
         data_dir (str): Base directory of the dataset.
-        split_list_file (str): Path to the file containing image filenames for a specific split (train or val).
+        split_name (str): Split to be used. Can be train, val or test.
         single_channel (bool): Whether to convert images to single-channel grayscale.
         classes (list): List of class names to consider (defaults to PASCAL VOC classes).
 
@@ -89,19 +89,15 @@ def load_classification_data(data_dir, split_list_file, single_channel=False, cl
     task_dir = os.path.join(data_dir, "classification")
 
     # Read data.json file containing image names and corresponding objects
-    with open(os.path.join(task_dir, "data.json"), "r") as file:
+    with open(os.path.join(task_dir, f"{split_name}_data.json"), "r") as file:
         annotations = json.load(file)
-
-    # Read train.txt or val.txt file containing list of images for each split
-    with open(split_list_file) as file:
-        split_files = [line.rstrip() for line in file]
 
     # Create list of filenames and labels
     filenames = []
     labels = []
-    for filename in split_files:
+    for filename, objects in annotations.items():
         filenames.append(filename)
-        labels.append(objects_to_labels(annotations[filename], classes))
+        labels.append(objects_to_labels(objects, classes))
 
     labels = np.array(labels).astype(np.float32)
 
@@ -132,13 +128,13 @@ def load_classification_data(data_dir, split_list_file, single_channel=False, cl
     return dataset
 
 
-def create_dataset_classification(data_dir, split_list_file, batch_size, single_channel=False, classes=None):
+def create_dataset_classification(data_dir, split_name, batch_size, single_channel=False, classes=None):
     """
     Creates a batched and prefetched dataset for classification.
 
     Args:
         data_dir (str): Base directory of the dataset.
-        split_list_file (str): Path to the file containing image filenames for a specific split.
+        split_name (str): Split to be used. Can be train, val or test.
         batch_size (int): Number of samples per batch.
         single_channel (bool): Whether to convert images to single-channel grayscale.
         classes (list): List of class names to consider (defaults to PASCAL VOC classes).
@@ -146,7 +142,7 @@ def create_dataset_classification(data_dir, split_list_file, batch_size, single_
     Returns:
         tf.data.Dataset: Batched and prefetched dataset for classification.
     """
-    dataset = load_classification_data(data_dir, split_list_file, single_channel, classes)
+    dataset = load_classification_data(data_dir, split_name, single_channel, classes)
     
     # Batch with known shape
     if single_channel:
