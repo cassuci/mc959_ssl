@@ -38,7 +38,9 @@ def prepare_coco_data_colorization(data_dir, output_dir, num_samples=None):
     if num_samples is None:
         num_samples = len(image_files)
 
-    for i, image_file in enumerate(tqdm(image_files[:num_samples], desc="Preparing COCO data")):
+    for i, image_file in enumerate(
+        tqdm(image_files[:num_samples], desc="Preparing COCO data")
+    ):
         image_path = os.path.join(image_dir, image_file)
         image = load_image(image_path)
         image = resize_image(image)
@@ -57,7 +59,9 @@ def prepare_coco_data_colorization(data_dir, output_dir, num_samples=None):
         )  # Save LAB image
 
 
-def save_segmentation_arrays(coco, data_dir, output_dir_segmentation, img_id, catIds, split):
+def save_segmentation_arrays(
+    coco, data_dir, output_dir_segmentation, img_id, catIds, split
+):
     img_data = coco.loadImgs(img_id)[0]
     img = io.imread(os.path.join(data_dir, f"{split}2017", img_data["file_name"]))
     height, width = img.shape[:2]
@@ -83,7 +87,9 @@ def save_segmentation_arrays(coco, data_dir, output_dir_segmentation, img_id, ca
         if cat_id in catIds:
             class_idx = catIds.index(cat_id)
             mask = coco.annToMask(ann)
-            binary_masks[:, :, class_idx] = np.maximum(binary_masks[:, :, class_idx], mask)
+            binary_masks[:, :, class_idx] = np.maximum(
+                binary_masks[:, :, class_idx], mask
+            )
 
     # Compute the background mask as the "negative" of the sum of all other masks
     background_mask = np.ones((height, width), dtype=np.float16)
@@ -106,9 +112,15 @@ def save_segmentation_arrays(coco, data_dir, output_dir_segmentation, img_id, ca
     np.save(os.path.join(output_dir_segmentation, f"mask_{img_id}.npy"), binary_masks)
 
 
-def prepare_coco_data_segmentation(data_dir, output_dir, split="train", num_samples=None):
-    annotations_path = os.path.join(data_dir, "annotations", f"instances_{split}2017.json")
-    output_dir_segmentation = os.path.join(output_dir, "coco", "segmentation", f"{split}2017")
+def prepare_coco_data_segmentation(
+    data_dir, output_dir, split="train", num_samples=None
+):
+    annotations_path = os.path.join(
+        data_dir, "annotations", f"instances_{split}2017.json"
+    )
+    output_dir_segmentation = os.path.join(
+        output_dir, "coco", "segmentation", f"{split}2017"
+    )
     os.makedirs(output_dir_segmentation, exist_ok=True)
 
     coco = COCO(annotations_path)
@@ -155,7 +167,9 @@ def main(
     segmentation_val_samples,
 ):
     """Prepare COCO dataset for colorization and segmentation tasks."""
-    prepare_coco_data_colorization(coco_dir, output_dir, num_samples=colorization_samples)
+    prepare_coco_data_colorization(
+        coco_dir, output_dir, num_samples=colorization_samples
+    )
 
     prepare_coco_data_segmentation(
         coco_dir, output_dir, "train", num_samples=segmentation_train_samples
@@ -168,7 +182,9 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Prepare COCO dataset for various tasks.")
+    parser = argparse.ArgumentParser(
+        description="Prepare COCO dataset for various tasks."
+    )
     parser.add_argument(
         "--coco_dir",
         type=str,
