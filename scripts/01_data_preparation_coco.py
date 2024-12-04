@@ -21,17 +21,49 @@ from src.libs.data_processing import (
 
 
 def is_color_image(image):
-    """Check if the image has three channels (RGB)."""
+    """
+    Determine if an input image is a color image with three RGB channels.
+
+    This function checks the dimensionality and channel count of the image to 
+    verify if it's a color image. Color images typically have three dimensions 
+    with the last dimension representing color channels.
+
+    Args:
+        image (numpy.ndarray): Input image to check for color channels.
+
+    Returns:
+        bool: True if the image has three channels, False otherwise.
+    """
     return image.ndim == 3 and image.shape[2] == 3
 
 
 def prepare_coco_data_colorization(data_dir, output_dir, num_samples=None):
-    """Prepare COCO dataset for pretext tasks."""
+    """
+    Prepare COCO dataset images for colorization pretext task.
+
+    This function processes color images from the COCO dataset for a colorization 
+    task. It performs the following key steps:
+    1. Randomly shuffle and select images
+    2. Resize and normalize images
+    3. Convert images to LAB color space
+    4. Create grayscale versions for colorization task
+    5. Save preprocessed images as NumPy arrays
+
+    Args:
+        data_dir (str): Root directory of the COCO dataset.
+        output_dir (str): Directory to save processed colorization data.
+        num_samples (int, optional): Number of images to process. 
+                                     Defaults to processing all images.
+
+    Notes:
+        - Skips grayscale images
+        - Saves grayscale and color (LAB) images as separate NumPy arrays
+    """
     image_dir = os.path.join(data_dir, "train2017")
-    annotations_dir = os.path.join(data_dir, "annotations")
     output_dir_colorization = os.path.join(output_dir, "coco", "colorization")
     os.makedirs(output_dir_colorization, exist_ok=True)
 
+    # Get all JPEG image files and shuffle them
     image_files = [f for f in os.listdir(image_dir) if f.endswith(".jpg")]
     np.random.shuffle(image_files)
 
@@ -53,6 +85,8 @@ def prepare_coco_data_colorization(data_dir, output_dir, num_samples=None):
         # Colorization task in LAB color space
         lab_image = rgb2lab(image)  # Convert RGB to LAB
         gray_image = create_colorization_task(image)
+        
+        # Save preprocessed images
         np.save(os.path.join(output_dir_colorization, f"gray{i}.npy"), gray_image)
         np.save(
             os.path.join(output_dir_colorization, f"color{i}.npy"), lab_image
@@ -62,6 +96,28 @@ def prepare_coco_data_colorization(data_dir, output_dir, num_samples=None):
 def save_segmentation_arrays(
     coco, data_dir, output_dir_segmentation, img_id, catIds, split
 ):
+    """
+    Process a single image for semantic segmentation task.
+
+    Generates binary masks for specified object categories, including a background mask.
+    Handles image resizing, normalization, and mask generation.
+
+    Args:
+        coco (COCO): COCO annotations object.
+        data_dir (str): Root directory of the COCO dataset.
+        output_dir_segmentation (str): Output directory for segmentation data.
+        img_id (int): Image ID from COCO dataset.
+        catIds (list): List of category IDs to extract segmentation masks for.
+        split (str): Dataset split (e.g., 'train', 'val').
+
+    Returns:
+        None: Saves processed image, grayscale image, and segmentation masks as NumPy arrays.
+
+    Notes:
+        - Skips images without annotations for specified categories
+        - Generates multi-channel binary masks 
+        - Adds a background mask as the final channel
+    """
     img_data = coco.loadImgs(img_id)[0]
     img = io.imread(os.path.join(data_dir, f"{split}2017", img_data["file_name"]))
     height, width = img.shape[:2]
@@ -72,16 +128,13 @@ def save_segmentation_arrays(
     num_classes = len(catIds)
     binary_masks = np.zeros((height, width, num_classes), dtype=np.uint8)
 
+    # Check if any annotation category is in the specified categories
     annotations = coco.loadAnns(coco.getAnnIds(imgIds=[img_id]))
-    # Check if any annotation category is in catIds
-    contains_class = False
-    for ann in annotations:
-        if ann["category_id"] in catIds:
-            contains_class = True
-            break
+    contains_class = any(ann["category_id"] in catIds for ann in annotations)
     if not contains_class:
         return
 
+    # Generate binary masks for specified categories
     for ann in annotations:
         cat_id = ann["category_id"]
         if cat_id in catIds:
@@ -91,19 +144,21 @@ def save_segmentation_arrays(
                 binary_masks[:, :, class_idx], mask
             )
 
-    # Compute the background mask as the "negative" of the sum of all other masks
+    # Compute background mask
     background_mask = np.ones((height, width), dtype=np.float16)
     background_mask = np.maximum(background_mask - np.sum(binary_masks, axis=-1), 0)
 
-    # Add the background mask as the last channel
+    # Add background mask as the last channel
     binary_masks = np.concatenate(
         (binary_masks, np.expand_dims(background_mask, axis=-1)), axis=-1
     )
 
+    # Normalize and convert image to grayscale
     img = resize_normalize(img)
     input_gray_image = np.dot(img[..., :3], [0.2989, 0.5870, 0.1140])
     binary_masks = resize_image(binary_masks)
 
+    # Save processed data
     np.save(os.path.join(output_dir_segmentation, f"image_{img_id}.npy"), img)
     np.save(
         os.path.join(output_dir_segmentation, f"inputgray_{img_id}.npy"),
@@ -115,6 +170,24 @@ def save_segmentation_arrays(
 def prepare_coco_data_segmentation(
     data_dir, output_dir, split="train", num_samples=None
 ):
+    """
+    Prepare COCO dataset for semantic segmentation task.
+
+    Processes images from specified dataset split (train/val) and generates 
+    segmentation masks for predefined object categories.
+
+    Args:
+        data_dir (str): Root directory of the COCO dataset.
+        output_dir (str): Directory to save processed segmentation data.
+        split (str, optional): Dataset split to process. Defaults to 'train'.
+        num_samples (int, optional): Number of images to process. 
+                                     Defaults to processing all images.
+
+    Notes:
+        - Uses concurrent processing for efficient data preparation
+        - Focuses on specific object categories (person, car, chair, etc.)
+        - Generates multi-channel binary masks with background
+    """
     annotations_path = os.path.join(
         data_dir, "annotations", f"instances_{split}2017.json"
     )
@@ -128,22 +201,20 @@ def prepare_coco_data_segmentation(
     if num_samples is not None:
         img_ids = img_ids[:num_samples]
 
+    # Define categories for segmentation
     catIds = coco.getCatIds(
         catNms=[
             "person",
             "car",
             "chair",
-            # "book",
-            # "bottle",
-            # "cup",
-            # "dining table",
-            # "traffic light",
-            # "bowl",
-            # "handbag",
+            # Commented out additional categories for flexibility
+            # "book", "bottle", "cup", "dining table", 
+            # "traffic light", "bowl", "handbag"
         ]
     )
     cat_names = [cat["name"] for cat in coco.loadCats(catIds)]
 
+    # Use ThreadPoolExecutor for parallel processing of images
     with concurrent.futures.ThreadPoolExecutor() as executor:
         list(
             tqdm(
@@ -166,7 +237,20 @@ def main(
     segmentation_train_samples,
     segmentation_val_samples,
 ):
-    """Prepare COCO dataset for colorization and segmentation tasks."""
+    """
+    Main entry point for COCO dataset preprocessing.
+
+    Orchestrates two primary preprocessing tasks:
+    1. Image Colorization: Prepare grayscale and color image pairs
+    2. Semantic Segmentation: Generate multi-class segmentation masks
+
+    Args:
+        coco_dir (str): Directory containing the COCO dataset.
+        output_dir (str): Directory to save processed data.
+        colorization_samples (int): Number of images for colorization task.
+        segmentation_train_samples (int): Number of training images for segmentation.
+        segmentation_val_samples (int): Number of validation images for segmentation.
+    """
     prepare_coco_data_colorization(
         coco_dir, output_dir, num_samples=colorization_samples
     )
@@ -183,37 +267,38 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Prepare COCO dataset for various tasks."
+        description="Preprocess COCO dataset for colorization and segmentation tasks. "
+        "Generates preprocessed data for machine learning model training."
     )
     parser.add_argument(
         "--coco_dir",
         type=str,
         default=os.path.join("data", "coco"),
-        help="Directory where the COCO dataset is stored. Default: 'data/coco'.",
+        help="Directory containing the COCO dataset. Default: 'data/coco'.",
     )
     parser.add_argument(
         "--output_dir",
         type=str,
         default=os.path.join("data", "processed"),
-        help="Directory to store the processed data. Default: 'data/processed'.",
+        help="Directory to store processed data. Default: 'data/processed'.",
     )
     parser.add_argument(
         "--colorization_samples",
         type=int,
         default=1000,
-        help="Number of samples for colorization task. Default: 1000.",
+        help="Number of images for colorization task preprocessing. Default: 1000.",
     )
     parser.add_argument(
         "--segmentation_train_samples",
         type=int,
         default=1000,
-        help="Number of samples for segmentation (train split). Default: 1000.",
+        help="Number of training images for segmentation preprocessing. Default: 1000.",
     )
     parser.add_argument(
         "--segmentation_val_samples",
         type=int,
         default=200,
-        help="Number of samples for segmentation (validation split). Default: 200.",
+        help="Number of validation images for segmentation preprocessing. Default: 200.",
     )
 
     args = parser.parse_args()
