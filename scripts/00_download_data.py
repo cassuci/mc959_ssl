@@ -10,7 +10,13 @@ from tqdm import tqdm
 
 
 def download_file(url, filename):
-    """Download a file with a progress bar."""
+    """
+    Download a file with a progress bar.
+    
+    Args:
+        url (str): URL to be downloaded.
+        filename (str): Path to save file.
+    """
     with tqdm(unit="B", unit_scale=True, unit_divisor=1024, miniters=1, desc=filename) as t:
         urllib.request.urlretrieve(
             url, filename, reporthook=lambda b, bsize, tsize: t.update(bsize)
@@ -18,7 +24,12 @@ def download_file(url, filename):
 
 
 def download_and_extract_coco(data_dir):
-    """Download and extract COCO dataset."""
+    """
+    Download and extract COCO dataset.
+    
+    Args:
+        data_dir (str): Directory to save COCO dataset.
+    """
     train_url = "http://images.cocodataset.org/zips/train2017.zip"
     val_url = "http://images.cocodataset.org/zips/val2017.zip"
     annotations_url = "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
@@ -59,7 +70,12 @@ def download_and_extract_coco(data_dir):
 
 
 def download_and_extract_pascal_voc(data_dir):
-    """Download and extract Pascal VOC dataset."""
+    """
+    Download and extract Pascal VOC dataset.
+    
+    Args:
+        data_dir (str): Directory to save Pascal VOC dataset.
+    """
     pascal_url = "http://host.robots.ox.ac.uk/pascal/VOC/voc2012/VOCtrainval_11-May-2012.tar"
 
     os.makedirs(data_dir, exist_ok=True)
@@ -84,7 +100,13 @@ def download_and_extract_pascal_voc(data_dir):
 
 
 def main(coco_dir, pascal_voc_dir):
-    """Download and extract datasets."""
+    """
+    Download and extract dataset.
+    
+    Args:
+        coco_dir (str): Directory to save COCO dataset.
+        pascal_voc_dir (str): Directory to save Pascal VOC dataset.
+    """
     download_and_extract_coco(coco_dir)
     download_and_extract_pascal_voc(pascal_voc_dir)
     print("Datasets downloaded and extracted successfully!")

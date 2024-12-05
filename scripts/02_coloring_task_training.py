@@ -13,7 +13,15 @@ from src.models.resnet import ResNet18, ResNet50
 
 
 def get_latest_checkpoint(checkpoint_dir):
-    """Find the latest checkpoint file and extract its epoch number."""
+    """
+    Finds the latest checkpoint file and extract its epoch number.
+    
+    Args:
+        checkpoint_dir (str): Directory containing Tensorflow checkpoints.
+
+    Returns:
+        tuple: Filepath of the latest checkpoing and its epoch number.
+    """
     if not os.path.exists(checkpoint_dir):
         return None, 0
 
@@ -40,7 +48,16 @@ def get_latest_checkpoint(checkpoint_dir):
 
 
 def get_file_paths(data_dir):
-    """Get file paths for colorization task and split into train/val sets."""
+    """
+    Generates train and validation file paths for grayscale and color images.
+
+    Args:
+        data_dir (str): Path to the directory containing grayscale and color image files.
+
+    Returns:
+        tuple: Two tuples containing train and validation file paths for grayscale and color images.
+    """
+
     files = os.listdir(data_dir)
 
     gray_files = sorted([os.path.join(data_dir, f) for f in files if f.startswith("gray")])
@@ -72,7 +89,16 @@ def get_file_paths(data_dir):
 
 
 def load_image(file_path):
-    """Loads and preprocesses an image for colorization."""
+    """
+    Loads and preprocesses an image from a file.
+
+    Args:
+        file_path (tf.Tensor): Path to the image file.
+
+    Returns:
+        tf.Tensor: Preprocessed image tensor.
+    """
+
     # Convert the EagerTensor back to a numpy string
     file_path = file_path.numpy().decode("utf-8")
 
@@ -107,7 +133,19 @@ def load_image(file_path):
 
 
 def create_dataset(gray_files, color_files, batch_size, shuffle=True):
-    """Creates a TensorFlow dataset for colorization."""
+    """
+    Creates a TensorFlow dataset for grayscale-to-color image pairs.
+
+    Args:
+        gray_files (list): List of file paths for grayscale images.
+        color_files (list): List of file paths for color images.
+        batch_size (int): Batch size for training.
+        shuffle (bool): Whether to shuffle the dataset.
+
+    Returns:
+        tf.data.Dataset: Dataset containing grayscale and color image pairs, batched and prefetched.
+    """
+
     # Create datasets from file paths
     gray_dataset = tf.data.Dataset.from_tensor_slices(gray_files)
     color_dataset = tf.data.Dataset.from_tensor_slices(color_files)
@@ -143,9 +181,11 @@ def create_dataset(gray_files, color_files, batch_size, shuffle=True):
 
 
 class TrainingProgressCallback(tf.keras.callbacks.Callback):
-    """Custom callback to track and save training progress."""
 
     def __init__(self, checkpoint_dir="checkpoints", save_freq=5):
+        """
+        Custom callback to track and save training progress.
+        """
         super().__init__()
         self.checkpoint_dir = checkpoint_dir
         self.save_freq = save_freq
@@ -168,6 +208,13 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
             self.best_val_loss = float(np.load(best_loss_path))
 
     def _initialize_history(self):
+        """
+        Initializes an empty history dictionary to track training and validation metrics.
+
+        Returns:
+            dict: Dictionary with keys for loss, validation loss, and metrics.
+        """
+
         return {
             "loss": [],
             "val_loss": [],
@@ -176,6 +223,17 @@ class TrainingProgressCallback(tf.keras.callbacks.Callback):
         }
 
     def on_epoch_end(self, epoch, logs=None):
+        """
+        Handles operations at the end of each training epoch, including:
+            - Updating training history.
+            - Saving periodic model checkpoints.
+            - Saving the best model based on validation loss.
+
+        Args:
+            epoch (int): Current epoch number.
+            logs (dict): Training and validation metrics for the epoch.
+        """
+
         # Update history
         for metric in self.history.keys():
             if metric in logs:
@@ -216,6 +274,16 @@ class VGGPerceptualLoss(tf.keras.Model):
         self.resize_inputs = resize_inputs
 
     def call(self, inputs):
+        """
+        Calculates perceptual loss by extracting features from specific layers of a VGG19 model.
+
+        Args:
+            inputs (tf.Tensor): Input images normalized to the range [0, 255].
+
+        Returns:
+            list: Extracted feature maps from the specified VGG19 layers.
+        """
+
         # Preprocessing for VGG
         x = tf.keras.applications.vgg19.preprocess_input(inputs * 255.0)
         return self.model(x)
@@ -231,6 +299,16 @@ class ColorizationLoss(tf.keras.losses.Loss):
 
     @staticmethod
     def inverse_scale_output(batch):
+        """
+        Reverses scaling of LAB image channels to their original range.
+
+        Args:
+            batch (tf.Tensor): Batch of LAB images with scaled values.
+
+        Returns:
+            tf.Tensor: LAB images with original value ranges restored.
+        """
+
         # Ensure the batch has the expected shape
         if batch.shape[-1] != 3:
             raise ValueError(f"Expected batch to have 3 channels, got {batch.shape[-1]}")
@@ -248,13 +326,33 @@ class ColorizationLoss(tf.keras.losses.Loss):
 
     @staticmethod
     def lab_to_rgb(lab):
-        """Convert LAB to RGB color space using TensorFlow operations."""
+        """
+        Converts images from LAB color space to RGB color space.
+
+        Args:
+            lab (tf.Tensor): LAB images in float32 format.
+
+        Returns:
+            tf.Tensor: RGB images in float32 format.
+        """
+
         # Efficient LAB to RGB conversion using TensorFlow's built-in functions
         lab = tf.image.convert_image_dtype(lab, dtype=tf.float32)
         rgb = tf.image.convert_image_dtype(tfio.experimental.color.lab_to_rgb(lab), dtype=tf.uint8)
         return tf.image.convert_image_dtype(rgb, dtype=tf.float32)
 
     def call(self, y_true, y_pred):
+        """
+        Computes the combined L1 loss and perceptual loss for colorization.
+
+        Args:
+            y_true (tf.Tensor): Ground truth LAB images.
+            y_pred (tf.Tensor): Predicted LAB images.
+
+        Returns:
+            tf.Tensor: Total loss combining L1 and perceptual losses.
+        """
+
         # Ensure inputs have correct shape and data type
         y_true = tf.cast(y_true, tf.float32)
         y_pred = tf.cast(y_pred, tf.float32)
@@ -282,7 +380,20 @@ class ColorizationLoss(tf.keras.losses.Loss):
 
 
 def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_dir=None):
-    """Main training function for colorization with validation and perceptual loss."""
+    """
+    Trains a colorization model using a custom loss and validation.
+
+    Args:
+        data_dir (str): Directory containing the dataset.
+        model (tf.keras.Model): Colorization model to train.
+        epochs (int): Number of training epochs.
+        batch_size (int): Training batch size.
+        checkpoint_dir (str): Directory for saving and loading checkpoints.
+
+    Returns:
+        tf.keras.callbacks.History: Training history object containing metrics and loss values.
+    """
+
     if checkpoint_dir is None:
         checkpoint_dir = os.path.join("models", "checkpoints")
 
@@ -366,7 +477,18 @@ def train_colorization(data_dir, model, epochs=100, batch_size=16, checkpoint_di
 
 
 def main(data_dir, checkpoint_dir, save_path, epochs, batch_size, seed):
-    """Train a colorization model."""
+    """
+    Train a colorization model.
+
+    Args:
+        data_dir (str): Path to the training data directory.
+        checkpoint_dir (str): Path to save and load model checkpoints.
+        save_path (str): Path to save the final trained model.
+        epochs (int): Number of epochs to train the model.
+        batch_size (int): Training batch size.
+        seed (int): Random seed for reproducibility.
+    """
+
     # Set random seeds for reproducibility
     tf.random.set_seed(seed)
     np.random.seed(seed)

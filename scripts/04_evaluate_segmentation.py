@@ -143,6 +143,18 @@ class COCOSegmentationEvaluator:
 
 
 def iou_metric(y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 3) -> tf.Tensor:
+    """
+    Calculates the Intersection over Union (IoU) metric for each class in a multi-class segmentation task.
+
+    Args:
+        y_true (tf.Tensor): Ground truth tensor with shape [batch, height, width, num_classes].
+        y_pred (tf.Tensor): Predicted tensor with shape [batch, height, width, num_classes].
+        num_classes (int): Number of segmentation classes.
+
+    Returns:
+        list: List of mean IoU values for each class, averaged over the batch.
+    """
+
     # Binarize predictions
     y_pred_bin = tf.cast(y_pred, tf.float32)
 
@@ -171,8 +183,18 @@ def iou_metric(y_true: tf.Tensor, y_pred: tf.Tensor, num_classes: int = 3) -> tf
 
 def evaluate_model(model, test_dataset, evaluator, num_classes=3):
     """
-    Evaluate the model on test dataset and compute metrics per class
+    Evaluates a segmentation model on a test dataset using IoU and COCO metrics.
+
+    Args:
+        model (tf.keras.Model): The segmentation model to evaluate.
+        test_dataset (tf.data.Dataset): Test dataset containing input images and ground truth masks.
+        evaluator (COCOSegmentationEvaluator): Evaluator for computing COCO metrics.
+        num_classes (int): Number of segmentation classes.
+
+    Returns:
+        dict: Evaluation results containing loss, mean IoU, mAP, and per-class IoU.
     """
+
     total_loss = 0
     class_ious = np.zeros(num_classes)  # Assuming 3 classes
     num_batches = 0
@@ -242,6 +264,14 @@ def evaluate_model(model, test_dataset, evaluator, num_classes=3):
 
 
 def get_args():
+    """
+    Parses command-line arguments for the evaluation script.
+
+    Returns:
+        argparse.Namespace: Parsed arguments including dataset path, model checkpoint path, 
+                            batch size, and whether to use grayscale images.
+    """
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--data_path", default="data", type=str, help="Dataset folder path"
